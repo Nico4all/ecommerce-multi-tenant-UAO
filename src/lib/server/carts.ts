@@ -1,3 +1,4 @@
+import { ORIGINAL_STORE_ID } from "../../../prisma/stores";
 import "server-only";
 import { cookies } from "next/headers";
 import { prisma } from "@/lib/prisma";
@@ -55,14 +56,14 @@ async function findCurrentCart() {
   const session = await getSession();
   if (session) {
     return prisma.cart.findUnique({
-      where: { userId: session.id },
+      where: { storeId_userId: { storeId: ORIGINAL_STORE_ID, userId: session.id } },
       include: cartInclude,
     });
   }
   const sid = (await cookies()).get(SID_COOKIE)?.value;
   if (!sid) return null;
   return prisma.cart.findUnique({
-    where: { sessionId: sid },
+    where: { storeId_sessionId: { storeId: ORIGINAL_STORE_ID, sessionId: sid } },
     include: cartInclude,
   });
 }
@@ -98,7 +99,7 @@ async function ensureCart() {
   const session = await getSession();
   if (session) {
     return prisma.cart.upsert({
-      where: { userId: session.id },
+      where: { storeId_userId: { storeId: ORIGINAL_STORE_ID, userId: session.id } },
       update: {},
       create: { userId: session.id },
     });
@@ -106,7 +107,7 @@ async function ensureCart() {
   const store = await cookies();
   const sid = store.get(SID_COOKIE)?.value;
   if (sid) {
-    const existing = await prisma.cart.findUnique({ where: { sessionId: sid } });
+    const existing = await prisma.cart.findUnique({ where: { storeId_sessionId: { storeId: ORIGINAL_STORE_ID, sessionId: sid } } });
     if (existing) return existing;
   }
   const newSid = crypto.randomUUID();
@@ -208,7 +209,7 @@ export async function mergeGuestCart(userId: string) {
   if (!sid) return;
 
   const guest = await prisma.cart.findUnique({
-    where: { sessionId: sid },
+    where: { storeId_sessionId: { storeId: ORIGINAL_STORE_ID, sessionId: sid } },
     include: { items: true },
   });
   if (!guest) {
@@ -217,7 +218,7 @@ export async function mergeGuestCart(userId: string) {
   }
 
   const userCart = await prisma.cart.upsert({
-    where: { userId },
+    where: { storeId_userId: { storeId: ORIGINAL_STORE_ID, userId } },
     update: {},
     create: { userId },
   });
