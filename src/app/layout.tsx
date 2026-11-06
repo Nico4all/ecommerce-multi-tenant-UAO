@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, Plus_Jakarta_Sans } from "next/font/google";
+import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
@@ -12,17 +12,22 @@ import {
   serializeJsonLd,
 } from "@/lib/seo";
 
-const inter = Inter({
-  variable: "--font-inter",
+/**
+ * DM Sans es la tipografía principal de la identidad UAO (manual, pág. 32) y
+ * cubre interfaz y titulares. La alterna autorizada es Arial (pág. 33), que
+ * queda declarada como fallback en `globals.css`.
+ *
+ * Se carga la variable completa (sin `weight`) porque la interfaz usa de
+ * `medium` a `extrabold`, y el manual pide aprovechar los distintos pesos
+ * para jerarquizar.
+ *
+ * La cadena de respaldo no se declara aquí sino en `globals.css`, para que
+ * siga aplicando aunque la variable no llegue a definirse.
+ */
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans",
   subsets: ["latin"],
   display: "swap",
-});
-
-const jakarta = Plus_Jakarta_Sans({
-  variable: "--font-jakarta",
-  subsets: ["latin"],
-  display: "swap",
-  weight: ["500", "600", "700", "800"],
 });
 
 export const metadata: Metadata = {
@@ -114,7 +119,7 @@ export default function RootLayout({
     <html
       lang="es"
       suppressHydrationWarning
-      className={`${inter.variable} ${jakarta.variable} h-full antialiased`}
+      className={`${dmSans.variable} h-full antialiased`}
     >
       <body className="min-h-dvh bg-background">
         <script
