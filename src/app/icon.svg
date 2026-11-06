@@ -1,0 +1,124 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="12 3 150 150" role="img" aria-label="Variedades Los Primos">
+  <title>Variedades Los Primos</title>
+<defs
+     id="defs6">
+    <linearGradient
+       id="green"
+       x1="0"
+       y1="0"
+       x2="1"
+       y2="1">
+      <stop
+         offset="0"
+         stop-color="#079447"
+         id="stop1" />
+      <stop
+         offset="1"
+         stop-color="#005D2B"
+         id="stop2" />
+    </linearGradient>
+    <linearGradient
+       id="orange"
+       x1="0"
+       y1="0"
+       x2="1"
+       y2="1">
+      <stop
+         offset="0"
+         stop-color="#FF8A00"
+         id="stop3" />
+      <stop
+         offset="1"
+         stop-color="#FF5700"
+         id="stop4" />
+    </linearGradient>
+    <linearGradient
+       id="beige"
+       x1="0"
+       y1="0"
+       x2="1"
+       y2="1">
+      <stop
+         offset="0"
+         stop-color="#F5D79B"
+         id="stop5" />
+      <stop
+         offset="1"
+         stop-color="#DAB66A"
+         id="stop6" />
+    </linearGradient>
+  </defs>
+<g
+     id="symbol"
+     transform="translate(5 5)">
+    <!-- Productos dentro del carrito -->
+    <path
+       d="M28 46 L25 23 L52 18 L60 48 Z"
+       fill="url(#green)"
+       id="path6" />
+    <path
+       d="M34 26 L47 23 L49 33 L36 35 Z"
+       fill="#fff"
+       opacity=".95"
+       id="path7" />
+    <path
+       d="M59 47 L56 14 L70 10 L72 22 L80 22 L82 10 L97 15 L94 47 Z"
+       fill="url(#orange)"
+       id="path8" />
+    <path
+       d="M100 47 L104 18 Q108 11 116 11 H124 Q132 11 136 18 L140 47 Z"
+       fill="url(#beige)"
+       id="path9" />
+    <path
+       d="M108 20 Q109 4 120 4 Q131 4 132 20"
+       fill="none"
+       stroke="url(#green)"
+       stroke-width="7"
+       stroke-linecap="round"
+       id="path10" />
+    <!-- Canasta -->
+    <path
+       d="M20 49 H116 Q121 49 118 56 L108 102 Q105 115 92 115 H43 Q30 115 26 102 L15 57 Q13 49 20 49 Z"
+       fill="url(#orange)"
+       id="path11" />
+    <!-- Personas / amistad -->
+    <circle
+       cx="51"
+       cy="72"
+       r="10"
+       fill="#fff"
+       id="circle11" />
+    <circle
+       cx="86"
+       cy="72"
+       r="10"
+       fill="#fff"
+       id="circle12" />
+    <path
+       d="M40 105 C40 88 45 82 52 82 C57 82 63 89 68 94 C73 89 79 82 85 82 C93 82 97 89 97 105 H84 C84 97 83 94 81 92 C77 97 73 101 68 105 C63 101 58 97 54 92 C52 94 51 98 51 105 Z"
+       fill="#fff"
+       id="path12" />
+    <!-- Estructura del carrito -->
+    <path
+       d="M34 117 H101 Q112 117 116 106 L126 55 Q129 43 140 43 H151"
+       fill="none"
+       stroke="url(#green)"
+       stroke-width="10"
+       stroke-linecap="round"
+       stroke-linejoin="round"
+       id="path13" />
+    <circle
+       cx="48"
+       cy="132"
+       r="10"
+       fill="url(#green)"
+       id="circle13" />
+    <circle
+       cx="95"
+       cy="132"
+       r="10"
+       fill="url(#green)"
+       id="circle14" />
+  </g>
+  
+</svg>

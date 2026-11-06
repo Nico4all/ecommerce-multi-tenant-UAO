@@ -1,0 +1,9 @@
+node_modules
+.next
+.git
+.npm-cache
+uploads
+npm-debug.log*
+.env*
+!.env.example
+!.env.production.example

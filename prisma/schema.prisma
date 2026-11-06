@@ -1,0 +1,660 @@
+// Variedades Los Primos — Modelo de datos completo.
+// Documentación y decisiones: docs/modelo-de-datos.md
+// Convención: enums en inglés (la UI los traduce a español).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ═══════════════════════════ Usuarios ═══════════════════════════
+
+enum Role {
+  ADMIN
+  CUSTOMER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+model User {
+  id           String     @id @default(cuid())
+  name         String
+  email        String     @unique
+  passwordHash String? // null si inicia sesión con proveedor social
+  /// `sub` de Google (estable aunque el usuario cambie de correo). null = nunca
+  /// ha entrado con Google.
+  googleId     String?    @unique
+  phone        String?
+  role         Role       @default(CUSTOMER)
+  status       UserStatus @default(ACTIVE)
+  /// Cuándo aceptó los Términos y la Política de datos personales. `null` en
+  /// cuentas creadas antes de que existiera esta casilla (admin/seed antiguos).
+  termsAcceptedAt DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  addresses   Address[]
+  orders      Order[]
+  reviews     Review[]
+  wishlist    WishlistItem[]
+  cart        Cart?
+  redemptions DiscountRedemption[]
+  emails      EmailLog[]
+  support     SupportMessage[]
+  resetTokens PasswordResetToken[]
+
+  @@map("users")
+}
+
+/// Token de recuperación de contraseña.
+///
+/// Se guarda HASHEADO (sha-256), nunca en claro: si se filtra la BD, el enlace
+/// enviado por correo no se puede reconstruir. Un solo uso (`usedAt`) y caduca
+/// (`expiresAt`, 1 hora). El barrido de vencidos es perezoso: se ignoran al
+/// validar y se sobrescriben al pedir uno nuevo.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model Address {
+  id        String  @id @default(cuid())
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  street    String
+  city      String
+  state     String
+  zip       String
+  country   String  @default("Colombia")
+  phone     String?
+  reference String? // referencias de entrega ("entre calles…")
+  isDefault Boolean @default(false)
+
+  @@index([userId])
+  @@map("addresses")
+}
+
+// ═══════════════════════════ Catálogo ═══════════════════════════
+
+model Category {
+  slug         String        @id
+  name         String
+  icon         String // nombre de icono Lucide
+  gradient     String // clases tailwind del tile
+  imageUrl     String? // imagen/SVG propia (si existe, reemplaza al icono)
+  description  String?       @db.Text
+  products     Product[]
+  homeSections HomeSection[]
+
+  @@map("categories")
+}
+
+enum ProductStatus {
+  PUBLISHED
+  DRAFT
+  ARCHIVED
+}
+
+model Product {
+  id           String        @id @default(cuid())
+  slug         String        @unique
+  name         String
+  brand        String
+  description  String?       @db.Text
+  sku          String?       @unique
+  status       ProductStatus @default(PUBLISHED)
+  featured     Boolean       @default(false)
+  badge        String? // "Más vendido", "2+1 Gratis"…
+
+  /// Costo de envío propio de este producto (anula la tarifa general de la
+  /// tienda para el pedido: ver `shippingFor` en lib/shipping.ts).
+  /// `null` = usa la tarifa general (gratis sobre el umbral, si no $15.000).
+  /// `0`    = este producto siempre envía gratis.
+  /// `> 0`  = costo fijo propio (p.ej. un mueble pesado con flete especial).
+  shippingCost Decimal? @db.Decimal(10, 2)
+
+  // Precios: `price` es el precio base. La oferta la gestiona el admin
+  // (/admin/offers) con `offerPrice` + `offerActive`.
+  price       Decimal  @db.Decimal(10, 2)
+  offerPrice  Decimal? @db.Decimal(10, 2)
+  offerActive Boolean  @default(false)
+
+  /// Costo del producto (lo que nos cuesta) para calcular ganancias. Interno:
+  /// NUNCA se envía a la tienda, solo al panel. `null` = sin costo registrado.
+  cost Decimal? @db.Decimal(10, 2)
+
+  // Stock general; si el producto tiene variantes, el stock vive en ellas.
+  stock Int @default(0)
+
+  // Agregados de reseñas (cache derivada de Review, se recalcula al reseñar).
+  ratingAvg   Decimal @default(0) @db.Decimal(2, 1)
+  reviewCount Int     @default(0)
+
+  categorySlug String
+  category     Category @relation(fields: [categorySlug], references: [slug], onDelete: Restrict)
+
+  images       ProductImage[]
+  specs        ProductSpec[]
+  variants     ProductVariant[]
+  reviews      Review[]
+  cartItems    CartItem[]
+  wishlistedBy WishlistItem[]
+  orderItems   OrderItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([categorySlug])
+  @@index([status])
+  @@map("products")
+}
+
+model ProductImage {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  url       String
+  alt       String?
+  sortOrder Int     @default(0)
+  isPrimary Boolean @default(false)
+
+  @@index([productId])
+  @@map("product_images")
+}
+
+model ProductSpec {
+  id        String  @id @default(cuid())
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  key       String // "Material"
+  value     String // "Aluminio"
+  sortOrder Int     @default(0)
+
+  @@unique([productId, key])
+  @@map("product_specs")
+}
+
+model ProductVariant {
+  id         String  @id @default(cuid())
+  productId  String
+  product    Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  name       String // "Grafito", "Talla M"
+  colorHex   String? // pastilla de color para la PDP ("#1f2937")
+  sku        String? @unique
+  stock      Int     @default(0)
+  priceDelta Decimal @default(0) @db.Decimal(10, 2) // ajuste sobre el precio del producto
+  sortOrder  Int     @default(0)
+
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@unique([productId, name])
+  @@map("product_variants")
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rating    Int // 1-5
+  title     String?
+  body      String   @db.Text
+  createdAt DateTime @default(now())
+
+  @@unique([productId, userId]) // una reseña por usuario y producto
+  @@index([productId])
+  @@map("reviews")
+}
+
+// ═══════════════════ Carrito y favoritos ═══════════════════
+
+model Cart {
+  id        String     @id @default(cuid())
+  userId    String?    @unique // carrito de usuario registrado
+  user      User?      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId String?    @unique // carrito anónimo (cookie de sesión)
+  items     CartItem[]
+  updatedAt DateTime   @updatedAt
+
+  @@map("carts")
+}
+
+model CartItem {
+  id        String          @id @default(cuid())
+  cartId    String
+  cart      Cart            @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+  qty       Int             @default(1)
+
+  @@unique([cartId, productId, variantId])
+  @@map("cart_items")
+}
+
+model WishlistItem {
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, productId])
+  @@map("wishlist_items")
+}
+
+// ═══════════════════════════ Pedidos ═══════════════════════════
+
+enum OrderStatus {
+  PENDING // pendiente
+  PAID // pagado
+  PACKING // empacando
+  SHIPPED // enviado
+  IN_TRANSIT // en camino
+  DELIVERED // entregado
+  CANCELLED // cancelado
+}
+
+model Order {
+  id     String      @id @default(cuid())
+  code   String      @unique // "TM-10241" (lo genera la app)
+  userId String? // null => compra de invitado
+  user   User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  status OrderStatus @default(PENDING)
+
+  // Snapshot de contacto y envío al momento de comprar (invitado o no):
+  // la orden no cambia aunque el usuario edite su perfil después.
+  email        String
+  phone        String
+  shippingName String
+  street       String
+  city         String
+  state        String
+  zip          String
+  country      String  @default("México")
+  reference    String?
+
+  subtotal      Decimal @db.Decimal(10, 2)
+  shippingCost  Decimal @default(0) @db.Decimal(10, 2)
+  discountTotal Decimal @default(0) @db.Decimal(10, 2)
+  total         Decimal @db.Decimal(10, 2)
+
+  // Rastreo del envío (lo fija el admin en /admin/orders/[id])
+  carrier        String?
+  trackingNumber String?
+  trackingUrl    String?
+  shippedAt      DateTime?
+  deliveredAt    DateTime?
+
+  items       OrderItem[]
+  payments    Payment[]
+  events      OrderStatusEvent[]
+  redemptions DiscountRedemption[]
+  emails      EmailLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String          @id @default(cuid())
+  orderId   String
+  order     Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String? // SetNull: la orden sobrevive si el producto se borra
+  product   Product?        @relation(fields: [productId], references: [id], onDelete: SetNull)
+  variantId String?
+  variant   ProductVariant? @relation(fields: [variantId], references: [id], onDelete: SetNull)
+
+  // Snapshot del producto al momento de la compra:
+  name        String
+  brand       String
+  variantName String?
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  /// Costo unitario al momento de la venta (snapshot). Así la ganancia histórica
+  /// no cambia si luego cambia el costo del producto. `null` = venta previa a
+  /// registrar costos.
+  unitCost    Decimal? @db.Decimal(10, 2)
+  qty         Int
+
+  @@index([orderId])
+  @@map("order_items")
+}
+
+/// Línea de tiempo del pedido (alimenta el stepper del admin y el rastreo del cliente).
+model OrderStatusEvent {
+  id        String      @id @default(cuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  note      String?     @db.Text
+  createdAt DateTime    @default(now())
+
+  @@index([orderId])
+  @@map("order_status_events")
+}
+
+// ═══════════════════════════ Pagos ═══════════════════════════
+
+enum PaymentMethod {
+  CARD
+  PAYPAL
+  EFECTY // pago en efectivo en puntos Efecty
+  TRANSFER
+  PSE // débito desde cuenta bancaria (el método online más usado en Colombia)
+  WOMPI // pasarela Wompi (tarjeta, PSE, Nequi… — el método real lo reporta Wompi)
+  COD // contra entrega: efectivo al recibir el pedido
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  REFUNDED
+  FAILED
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  orderId   String
+  order     Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  method    PaymentMethod
+  status    PaymentStatus @default(PENDING)
+  amount    Decimal       @db.Decimal(10, 2)
+  reference String? // id de pasarela / comprobante Efecty / referencia PSE
+  createdAt DateTime      @default(now())
+
+  @@index([orderId])
+  @@map("payments")
+}
+
+// ═══════════════════════ Descuentos ═══════════════════════
+
+enum DiscountType {
+  PERCENT
+  FIXED
+  FREE_SHIPPING
+  GIFT_CARD
+}
+
+enum DiscountStatus {
+  ACTIVE
+  SCHEDULED
+  EXPIRED
+  DISABLED
+}
+
+model DiscountCode {
+  id          String         @id @default(cuid())
+  code        String         @unique // "BIENVENIDO10"
+  type        DiscountType
+  value       Decimal        @default(0) @db.Decimal(10, 2) // % o monto según type
+  minPurchase Decimal?       @db.Decimal(10, 2)
+  usageLimit  Int? // null = ilimitado
+  usedCount   Int            @default(0)
+  balance     Decimal?       @db.Decimal(10, 2) // saldo restante (solo GIFT_CARD)
+  status      DiscountStatus @default(ACTIVE)
+  startsAt    DateTime?
+  expiresAt   DateTime?
+  description String?        @db.Text // nota interna ("campaña Buen Fin")
+  createdAt   DateTime       @default(now())
+
+  redemptions DiscountRedemption[]
+
+  @@map("discount_codes")
+}
+
+/// Canje: qué orden usó qué código y cuánto descontó.
+model DiscountRedemption {
+  id        String       @id @default(cuid())
+  codeId    String
+  code      DiscountCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+  orderId   String
+  order     Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  amount    Decimal      @db.Decimal(10, 2)
+  createdAt DateTime     @default(now())
+
+  @@unique([codeId, orderId])
+  @@map("discount_redemptions")
+}
+
+// ═══════════════ Contenido del landing y correos ═══════════════
+
+enum BannerPlacement {
+  HERO // carrusel principal
+  HERO_SIDE // banner lateral del hero
+  PROMO // tarjeta dentro de una sección de banners (grid)
+  STRIP // franja ancha dentro de una sección de banners
+}
+
+model Banner {
+  id        String          @id @default(cuid())
+  placement BannerPlacement
+  /// Todo el texto es opcional: un banner puede ser solo la imagen.
+  title     String?
+  subtitle  String?
+  highlight String? // "50% OFF"
+  /// Texto del botón. Sin él no se pinta botón y el banner entero es el enlace.
+  ctaText   String?
+  /// Siempre obligatorio: es a donde lleva el clic sobre el banner.
+  href      String
+  imageUrl  String? // imagen de fondo (cuando exista)
+  bgClass   String? // gradiente tailwind mientras no haya imagen
+  sortOrder Int             @default(0)
+  active    Boolean         @default(true)
+
+  // HERO/HERO_SIDE viven en la sección HERO por su placement.
+  // PROMO/STRIP pertenecen a una sección de banners concreta, lo que permite
+  // colocarlos arriba o debajo de cualquier fila de productos.
+  sectionId String?
+  section   HomeSection? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  @@index([placement, active])
+  @@index([sectionId])
+  @@map("banners")
+}
+
+// ═══════════════ Composición de la página de inicio ═══════════════
+
+enum HomeSectionKind {
+  HERO // carrusel + banners laterales
+  CATEGORIES // círculos de categorías
+  PRODUCTS // fila de productos (título + fuente)
+  BANNERS // banners intercalados entre secciones
+}
+
+/// De dónde salen los productos de una sección PRODUCTS.
+enum ProductSource {
+  OFFERS // en oferta (mayor descuento primero)
+  CATEGORY // una categoría concreta
+  FEATURED // destacados
+  NEWEST // más recientes
+  TOP_RATED // mejor calificados
+}
+
+enum BannerLayout {
+  GRID // tarjetas en rejilla (3 por fila)
+  WIDE // franja ancha a todo lo largo
+}
+
+/// Dónde se coloca el banner destacado de una sección PRODUCTS.
+enum SectionBannerPosition {
+  LEFT // banner a la izquierda, productos a la derecha
+  RIGHT // productos a la izquierda, banner a la derecha
+  TOP // banner ancho encima de los productos
+  BOTTOM // banner ancho debajo de los productos
+}
+
+/// Una sección de la home. El orden (`sortOrder`) define cómo se apilan,
+/// así el admin puede poner banners arriba o debajo de cada fila de productos.
+model HomeSection {
+  id    String          @id @default(cuid())
+  kind  HomeSectionKind
+  title String? // encabezado visible (PRODUCTS)
+
+  // Solo para PRODUCTS:
+  source       ProductSource?
+  categorySlug String?
+  category     Category?      @relation(fields: [categorySlug], references: [slug], onDelete: SetNull)
+  maxItems     Int            @default(5)
+  href         String? // destino de "Ver todo" (si null, se deriva)
+
+  // Solo para BANNERS:
+  bannerLayout BannerLayout?
+
+  // Banners de la sección. En BANNERS son el contenido; en PRODUCTS son
+  // banners destacados que se colocan junto a la fila según `bannerPosition`.
+  banners Banner[]
+
+  /// Posición del banner destacado dentro de una sección PRODUCTS.
+  /// `null` = la fila no muestra banner destacado aunque tenga uno asignado.
+  bannerPosition SectionBannerPosition?
+  /// Fondo de la sección completa (clases tailwind), p.ej. una franja de color.
+  /// Sirve de color de respaldo cuando hay `bgImageUrl`.
+  bgClass        String?
+  /// Imagen de fondo de la sección completa (campañas tipo "mundial").
+  bgImageUrl     String?
+  /// Oscurecido sobre la imagen de fondo (0-100) para que el texto se lea.
+  bgOverlay      Int                    @default(0)
+
+  sortOrder Int     @default(0)
+  active    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, sortOrder])
+  @@map("home_sections")
+}
+
+enum EmailType {
+  ORDER_CONFIRMATION // historial de compra
+  SHIPPING_UPDATE // estado + link de rastreo
+  DELIVERY_CONFIRMATION
+}
+
+/// Registro de correos enviados al cliente desde el panel de pedidos.
+model EmailLog {
+  id               String    @id @default(cuid())
+  orderId          String?
+  order            Order?    @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  userId           String?
+  user             User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  to               String
+  type             EmailType
+  includedTracking Boolean   @default(false)
+  sentAt           DateTime  @default(now())
+
+  @@index([orderId])
+  @@map("email_logs")
+}
+
+// ═══════════════ Avisos del panel ═══════════════
+
+enum NotificationType {
+  ORDER_CREATED // alguien compró
+  SUPPORT_MESSAGE // llegó una PQR o un contacto
+  REVIEW_CREATED // un comprador calificó un producto
+  LOW_STOCK // una venta dejó un producto casi sin unidades
+}
+
+/// Avisos de la campana del panel.
+///
+/// Los escriben los servicios cuando ocurre algo (checkout, PQR, reseña) y los
+/// lee el equipo. El estado de leído es COMPARTIDO: si un admin lo lee, queda
+/// leído para todos, que es como funciona una bandeja de equipo.
+model Notification {
+  id       String           @id @default(cuid())
+  type     NotificationType
+  title    String
+  body     String?          @db.Text
+  /// A dónde lleva el clic, p.ej. /admin/orders/xxx
+  href     String?
+  /// Entidad relacionada. Evita repetir el mismo aviso (p.ej. el stock bajo de
+  /// un producto del que ya avisamos y nadie ha leído todavía).
+  entityId String?
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([readAt, createdAt])
+  @@index([type, entityId])
+  @@map("notifications")
+}
+
+// ═══════════════ PQR y contacto ═══════════════
+
+enum SupportKind {
+  PETICION
+  QUEJA
+  RECLAMO
+  SUGERENCIA
+  CONTACTO // mensaje libre desde "Contáctanos"
+}
+
+enum SupportStatus {
+  NUEVO
+  EN_PROCESO
+  RESUELTO
+  CERRADO
+}
+
+/// Mensajes de PQR y de contacto que llegan desde la tienda.
+///
+/// En Colombia una PQR tiene plazos legales de respuesta, así que cada mensaje
+/// lleva radicado propio y estado. Hoy la respuesta queda registrada en el panel:
+/// no sale ningún correo porque la tienda todavía no tiene SMTP configurado.
+model SupportMessage {
+  id       String        @id @default(cuid())
+  /// Número visible para el cliente, p.ej. PQR-2026-000123.
+  radicado String        @unique
+  kind     SupportKind
+  status   SupportStatus @default(NUEVO)
+
+  name      String
+  email     String
+  phone     String?
+  /// Cédula o NIT: opcional, pero habitual en una PQR formal.
+  docId     String?
+  /// Pedido relacionado (código VLP-xxxxx), si aplica.
+  orderCode String?
+
+  subject String
+  message String @db.Text
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  /// Respuesta del equipo, registrada desde el panel.
+  response    String?   @db.Text
+  respondedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, createdAt])
+  @@index([kind])
+  @@map("support_messages")
+}

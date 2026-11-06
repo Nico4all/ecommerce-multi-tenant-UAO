@@ -1,0 +1,76 @@
+name: variedades-los-primos-production
+
+x-app-environment: &app-environment
+  DATABASE_URL: ${DATABASE_URL_DOCKER:?Define DATABASE_URL_DOCKER en .env.production}
+  USE_DATABASE: "true"
+  NODE_ENV: production
+  TZ: America/Bogota
+  NEXT_TELEMETRY_DISABLED: "1"
+
+services:
+  migrate:
+    image: variedades-los-primos-migrate:prod
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      target: migrator
+    container_name: variedades-los-primos-migrate
+    restart: "no"
+    env_file:
+      - ${APP_ENV_FILE:-.env.production}
+    environment: *app-environment
+    networks:
+      - apps_mind_net
+
+  app:
+    image: variedades-los-primos-app:prod
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      target: runner
+    container_name: variedades-los-primos-app
+    restart: unless-stopped
+    init: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    env_file:
+      - ${APP_ENV_FILE:-.env.production}
+    environment:
+      <<: *app-environment
+      HOSTNAME: 0.0.0.0
+      PORT: "3000"
+    ports:
+      - "127.0.0.1:${HOST_MACHINE_APP_PORT:-3004}:3000"
+    volumes:
+      - ./uploads:/app/uploads
+      - app_next_cache:/app/.next/cache
+    networks:
+      - apps_mind_net
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:3000/api/categories')
+          .then((response) => process.exit(response.ok ? 0 : 1))
+          .catch(() => process.exit(1))
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    stop_grace_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+
+volumes:
+  app_uploads:
+  app_next_cache:
+
+networks:
+  apps_mind_net:
+    external: true
