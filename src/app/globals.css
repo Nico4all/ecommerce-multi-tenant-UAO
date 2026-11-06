@@ -7,9 +7,11 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-inter);
+  /* Manual de Identidad UAO (págs. 32-33): DM Sans es la tipografía principal
+     de interfaz; Arial es la alterna autorizada cuando DM Sans no carga. */
+  --font-sans: var(--font-dm-sans), Arial, Helvetica, sans-serif;
   --font-mono: var(--font-mono);
-  --font-heading: var(--font-jakarta);
+  --font-heading: var(--font-dm-sans), Arial, Helvetica, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -37,6 +39,9 @@
   --color-muted: var(--muted);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-soft: var(--brand-soft);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
@@ -52,108 +57,167 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* ===== Variedades Los Primos: Verde mercado (marca) + Naranja (ofertas) ===== */
+/* ============================================================================
+   Sistema visual UAO — tokens reutilizables
+   Fuente: Manual de Identidad UAO, julio 2026.
+
+   · Dominantes (págs. 18-19): rojo principal #FF051E + crema #FBF5EC. El rojo
+     "SIEMPRE debe estar presente" y la crema equilibra la composición.
+   · Subordinados (pág. 21): #AC0B32, #8A1428, #FF836C, #FFFFFF. El manual los
+     autoriza para fondos de color, cuerpos de texto y títulos.
+   · Acentos (pág. 22): "NUNCA se debe implementar de forma independiente";
+     solo resaltan elementos pequeños (badges, estados).
+   · Proporción (pág. 24): dominantes 60% / subordinados 35% / acentos 5%.
+
+   Accesibilidad: el rojo #FF051E rinde 3.97:1 sobre blanco y 3.66:1 sobre
+   crema. Alcanza para elementos gráficos, foco y texto grande (WCAG 1.4.11 y
+   1.4.3) pero no para texto pequeño (4.5:1). Por eso el rojo queda reservado a
+   superficies dominantes, foco e iconografía, y las superficies interactivas
+   que llevan texto pequeño usan el subordinado #AC0B32 (7.4:1 sobre blanco).
+   ========================================================================= */
+
+/* Colores literales del manual. Única fuente de verdad: no se alteran. */
+:root {
+  --uao-red: #ff051e;
+  --uao-cream: #fbf5ec;
+  --uao-burgundy: #ac0b32;
+  --uao-dark: #8a1428;
+  --uao-coral: #ff836c;
+  --uao-white: #ffffff;
+
+  /* Acentos autorizados (pág. 22), solo para destacar elementos pequeños. */
+  --uao-accent-orange: #fe9800;
+  --uao-accent-teal: #00c6a1;
+  --uao-accent-red: #ff4503;
+
+  /* Neutros derivados: NO son colores de marca. Tinta cálida para texto y
+     superficies de modo oscuro, obtenidas de la familia del subordinado
+     #8A1428 para no introducir un matiz ajeno a la paleta. */
+  --uao-ink: #2a0a10;
+  --uao-night: #1a0a0e;
+  --uao-night-raised: #241014;
+}
+
+/* Mapeo semántico. Los nombres de token se conservan para no romper los
+   componentes existentes; solo cambia el valor al que apuntan. */
 :root {
   --radius: 0.5rem;
 
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.16 0.02 160);
+  /* Crema como lienzo dominante; tinta cálida para el cuerpo de texto. */
+  --background: var(--uao-cream);
+  --foreground: var(--uao-ink);
 
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.16 0.02 160);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.16 0.02 160);
+  --card: var(--uao-white);
+  --card-foreground: var(--uao-ink);
+  --popover: var(--uao-white);
+  --popover-foreground: var(--uao-ink);
 
-  /* Marca: verde esmeralda */
-  --primary: oklch(0.55 0.13 160);
-  --primary-foreground: oklch(0.99 0.01 160);
+  /* Rojo dominante: barras de marca, superficies amplias y texto grande. */
+  --brand: var(--uao-red);
+  --brand-foreground: var(--uao-white);
+  --brand-soft: color-mix(in oklab, var(--uao-red) 8%, var(--uao-white));
 
-  --secondary: oklch(0.96 0.01 160);
-  --secondary-foreground: oklch(0.24 0.03 160);
+  /* Interactivo con texto pequeño: subordinado #AC0B32 → 7.4:1 sobre blanco. */
+  --primary: var(--uao-burgundy);
+  --primary-foreground: var(--uao-white);
 
-  --muted: oklch(0.97 0.005 160);
-  --muted-foreground: oklch(0.5 0.02 160);
+  --secondary: color-mix(in oklab, var(--uao-red) 6%, var(--uao-white));
+  --secondary-foreground: var(--uao-dark);
 
-  /* Accent neutro (hovers sutiles de shadcn) */
-  --accent: oklch(0.96 0.02 160);
-  --accent-foreground: oklch(0.24 0.03 160);
+  --muted: color-mix(in oklab, var(--uao-dark) 5%, var(--uao-cream));
+  --muted-foreground: var(--uao-burgundy);
 
-  /* Ofertas / precios / urgencia: naranja */
-  --deal: oklch(0.65 0.21 42);
-  --deal-foreground: oklch(0.99 0.01 60);
+  --accent: color-mix(in oklab, var(--uao-coral) 20%, var(--uao-white));
+  --accent-foreground: var(--uao-dark);
 
-  --success: oklch(0.63 0.17 150);
-  --success-foreground: oklch(0.99 0.01 150);
+  /* Ofertas: acento naranja con tinta oscura (8.6:1). */
+  --deal: var(--uao-accent-orange);
+  --deal-foreground: var(--uao-ink);
 
-  --destructive: oklch(0.58 0.24 27);
+  --success: var(--uao-accent-teal);
+  --success-foreground: var(--uao-ink);
 
-  --border: oklch(0.92 0.01 160);
-  --input: oklch(0.92 0.01 160);
-  --ring: oklch(0.55 0.13 160);
+  /* Se usa como texto y como tinte al 10%, nunca como superficie sólida:
+     #8A1428 rinde 9.5:1 sobre blanco y 8.8:1 sobre crema. */
+  --destructive: var(--uao-dark);
 
-  --chart-1: oklch(0.55 0.13 160);
-  --chart-2: oklch(0.65 0.21 42);
-  --chart-3: oklch(0.63 0.17 150);
-  --chart-4: oklch(0.6 0.1 200);
-  --chart-5: oklch(0.7 0.15 90);
+  --border: color-mix(in oklab, var(--uao-dark) 16%, var(--uao-cream));
+  --input: color-mix(in oklab, var(--uao-dark) 22%, var(--uao-white));
+  --ring: var(--uao-red);
 
-  --sidebar: oklch(0.99 0.005 160);
-  --sidebar-foreground: oklch(0.16 0.02 160);
-  --sidebar-primary: oklch(0.55 0.13 160);
-  --sidebar-primary-foreground: oklch(0.99 0.01 160);
-  --sidebar-accent: oklch(0.96 0.02 160);
-  --sidebar-accent-foreground: oklch(0.24 0.03 160);
-  --sidebar-border: oklch(0.92 0.01 160);
-  --sidebar-ring: oklch(0.55 0.13 160);
+  --chart-1: var(--uao-red);
+  --chart-2: var(--uao-burgundy);
+  --chart-3: var(--uao-coral);
+  --chart-4: var(--uao-accent-teal);
+  --chart-5: var(--uao-accent-orange);
+
+  --sidebar: var(--uao-white);
+  --sidebar-foreground: var(--uao-ink);
+  --sidebar-primary: var(--uao-burgundy);
+  --sidebar-primary-foreground: var(--uao-white);
+  --sidebar-accent: color-mix(in oklab, var(--uao-red) 7%, var(--uao-white));
+  --sidebar-accent-foreground: var(--uao-dark);
+  --sidebar-border: color-mix(in oklab, var(--uao-dark) 14%, var(--uao-cream));
+  --sidebar-ring: var(--uao-red);
 }
 
+/* El manual no especifica modo oscuro. Esta variante no añade colores nuevos:
+   invierte la relación dominante (tinta cálida de fondo, crema de texto) y
+   reemplaza el rojo por el subordinado coral allí donde haría falta texto
+   pequeño, que sobre fondo oscuro el rojo no sostiene. */
 .dark {
-  --background: oklch(0.17 0.02 160);
-  --foreground: oklch(0.97 0.01 160);
+  --background: var(--uao-night);
+  --foreground: var(--uao-cream);
 
-  --card: oklch(0.21 0.02 160);
-  --card-foreground: oklch(0.97 0.01 160);
-  --popover: oklch(0.21 0.02 160);
-  --popover-foreground: oklch(0.97 0.01 160);
+  --card: var(--uao-night-raised);
+  --card-foreground: var(--uao-cream);
+  --popover: var(--uao-night-raised);
+  --popover-foreground: var(--uao-cream);
 
-  --primary: oklch(0.7 0.16 162);
-  --primary-foreground: oklch(0.18 0.03 160);
+  --brand: var(--uao-red);
+  --brand-foreground: var(--uao-white);
+  --brand-soft: color-mix(in oklab, var(--uao-red) 24%, var(--uao-night));
 
-  --secondary: oklch(0.27 0.02 160);
-  --secondary-foreground: oklch(0.97 0.01 160);
+  /* Coral sobre tinta: 7.8:1, frente a los 2.3:1 del rojo en este fondo. */
+  --primary: var(--uao-coral);
+  --primary-foreground: var(--uao-ink);
 
-  --muted: oklch(0.27 0.02 160);
-  --muted-foreground: oklch(0.72 0.02 160);
+  --secondary: color-mix(in oklab, var(--uao-cream) 10%, var(--uao-night));
+  --secondary-foreground: var(--uao-cream);
 
-  --accent: oklch(0.27 0.02 160);
-  --accent-foreground: oklch(0.97 0.01 160);
+  --muted: color-mix(in oklab, var(--uao-cream) 8%, var(--uao-night));
+  --muted-foreground: color-mix(in oklab, var(--uao-cream) 72%, var(--uao-night));
 
-  --deal: oklch(0.72 0.19 48);
-  --deal-foreground: oklch(0.18 0.03 60);
+  --accent: color-mix(in oklab, var(--uao-coral) 18%, var(--uao-night));
+  --accent-foreground: var(--uao-cream);
 
-  --success: oklch(0.7 0.16 150);
-  --success-foreground: oklch(0.18 0.03 150);
+  --deal: var(--uao-accent-orange);
+  --deal-foreground: var(--uao-ink);
 
-  --destructive: oklch(0.7 0.19 22);
+  --success: var(--uao-accent-teal);
+  --success-foreground: var(--uao-ink);
 
-  --border: oklch(1 0 0 / 12%);
-  --input: oklch(1 0 0 / 16%);
-  --ring: oklch(0.7 0.16 162);
+  /* Acento rojo-naranja: 5.6:1 como texto sobre el fondo oscuro. */
+  --destructive: var(--uao-accent-red);
 
-  --chart-1: oklch(0.7 0.16 162);
-  --chart-2: oklch(0.72 0.19 48);
-  --chart-3: oklch(0.7 0.16 150);
-  --chart-4: oklch(0.65 0.1 200);
-  --chart-5: oklch(0.75 0.15 90);
+  --border: color-mix(in oklab, var(--uao-cream) 16%, transparent);
+  --input: color-mix(in oklab, var(--uao-cream) 22%, transparent);
+  --ring: var(--uao-coral);
 
-  --sidebar: oklch(0.21 0.02 160);
-  --sidebar-foreground: oklch(0.97 0.01 160);
-  --sidebar-primary: oklch(0.7 0.16 162);
-  --sidebar-primary-foreground: oklch(0.18 0.03 160);
-  --sidebar-accent: oklch(0.27 0.02 160);
-  --sidebar-accent-foreground: oklch(0.97 0.01 160);
-  --sidebar-border: oklch(1 0 0 / 12%);
-  --sidebar-ring: oklch(0.7 0.16 162);
+  --chart-1: var(--uao-coral);
+  --chart-2: var(--uao-red);
+  --chart-3: var(--uao-accent-teal);
+  --chart-4: var(--uao-accent-orange);
+  --chart-5: color-mix(in oklab, var(--uao-cream) 60%, var(--uao-night));
+
+  --sidebar: var(--uao-night-raised);
+  --sidebar-foreground: var(--uao-cream);
+  --sidebar-primary: var(--uao-coral);
+  --sidebar-primary-foreground: var(--uao-ink);
+  --sidebar-accent: color-mix(in oklab, var(--uao-coral) 16%, var(--uao-night));
+  --sidebar-accent-foreground: var(--uao-cream);
+  --sidebar-border: color-mix(in oklab, var(--uao-cream) 14%, transparent);
+  --sidebar-ring: var(--uao-coral);
 }
 
 @layer base {
@@ -167,7 +231,7 @@
     @apply font-sans;
   }
   h1, h2, h3, h4, h5 {
-    font-family: var(--font-heading), var(--font-inter), sans-serif;
+    font-family: var(--font-dm-sans), Arial, Helvetica, sans-serif;
   }
 }
 
