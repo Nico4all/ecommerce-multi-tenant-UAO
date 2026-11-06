@@ -1,3 +1,4 @@
+import { ORIGINAL_STORE_ID, initialStores } from "./stores";
 import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
@@ -25,6 +26,16 @@ if (!process.env.DATABASE_URL) {
 
 const adapter = new PrismaMariaDb(process.env.DATABASE_URL);
 const prisma = new PrismaClient({ adapter });
+
+async function seedStores() {
+  for (const store of initialStores) {
+    await prisma.store.upsert({ where: { id: store.id }, update: {}, create: store });
+    await prisma.storeSettings.upsert({
+      where: { storeId: store.id }, update: {}, create: { storeId: store.id },
+    });
+  }
+  console.log("Tiendas: Variedades Los Primos; Frutas del Valle (inactiva, sin dominio)");
+}
 
 // Mapeos mock (español) -> enums del esquema (inglés)
 const discountTypeMap = {
@@ -73,7 +84,7 @@ async function seedCategories() {
   console.log("Sembrando categorías…");
   for (const c of categories) {
     await prisma.category.upsert({
-      where: { slug: c.slug },
+      where: { storeId_slug: { storeId: ORIGINAL_STORE_ID, slug: c.slug } },
       update: { name: c.name, icon: c.icon, gradient: c.gradient },
       create: { slug: c.slug, name: c.name, icon: c.icon, gradient: c.gradient },
     });
@@ -438,7 +449,7 @@ async function seedWishlist() {
     if (!product) continue;
     await prisma.wishlistItem.upsert({
       where: {
-        userId_productId: { userId: "u1", productId: product.id },
+        storeId_userId_productId: { storeId: ORIGINAL_STORE_ID, userId: "u1", productId: product.id },
       },
       update: {},
       create: { userId: "u1", productId: product.id },
@@ -459,10 +470,21 @@ async function seedWishlist() {
 const SEED_DEMO = process.env.SEED_DEMO === "true";
 
 async function main() {
+  if (process.env.NODE_ENV === "production" && SEED_DEMO) {
+    throw new Error("SEED_DEMO no está permitido en producción");
+  }
   // --- Imprescindible ---
+  await seedStores();
   await seedCategories();
   await seedHomeSections();
   await seedAdmin();
+
+  const admin = await prisma.user.findUniqueOrThrow({ where: { email: "admin@variedadeslosprimos.com" } });
+  await prisma.storeMembership.upsert({
+    where: { storeId_userId: { storeId: ORIGINAL_STORE_ID, userId: admin.id } },
+    update: {},
+    create: { storeId: ORIGINAL_STORE_ID, userId: admin.id, role: "ADMIN" },
+  });
 
   // --- Demo (opt-in) ---
   if (SEED_DEMO) {

@@ -1,3 +1,4 @@
+import { ORIGINAL_STORE_ID } from "../../../prisma/stores";
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "./api-helpers";
@@ -20,7 +21,7 @@ export async function validateDiscount(
   subtotal: number,
 ): Promise<AppliedDiscount> {
   const code = rawCode.trim().toUpperCase();
-  const d = await prisma.discountCode.findUnique({ where: { code } });
+  const d = await prisma.discountCode.findUnique({ where: { storeId_code: { storeId: ORIGINAL_STORE_ID, code } } });
   if (!d) throw new ApiError(400, "El código no existe");
 
   const now = new Date();

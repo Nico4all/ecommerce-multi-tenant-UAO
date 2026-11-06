@@ -1,7 +1,9 @@
+import { ORIGINAL_STORE_ID } from "../../../../prisma/stores";
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "../auth";
 import { ApiError } from "../api-helpers";
+import { detachVariants, removeProduct } from "../catalog-deletion";
 
 export interface AdminProductRow {
   id: string;
@@ -174,21 +176,22 @@ async function upsertExtras(
     }
   }
   if (input.variants) {
-    // Reemplazo total; los CartItem/OrderItem que apuntaban quedan en null
-    // (SetNull) y las órdenes conservan su snapshot de variantName.
-    await prisma.productVariant.deleteMany({ where: { productId } });
     const clean = input.variants.filter((v) => v.name.trim());
-    if (clean.length) {
-      await prisma.productVariant.createMany({
-        data: clean.map((v, i) => ({
-          productId,
-          name: v.name.trim(),
-          colorHex: v.colorHex || null,
-          stock: v.stock,
-          sortOrder: i,
-        })),
-      });
-    }
+    await prisma.$transaction(async (tx) => {
+      await detachVariants(tx, productId);
+      await tx.productVariant.deleteMany({ where: { productId } });
+      if (clean.length) {
+        await tx.productVariant.createMany({
+          data: clean.map((v, i) => ({
+            productId,
+            name: v.name.trim(),
+            colorHex: v.colorHex || null,
+            stock: v.stock,
+            sortOrder: i,
+          })),
+        });
+      }
+    });
   }
   if (input.images !== undefined) {
     // Reemplazo total: el orden que manda el panel es la verdad. `sortOrder`
@@ -231,7 +234,7 @@ function baseData(input: ProductInput) {
 
 export async function createProduct(input: ProductInput): Promise<AdminProductRow> {
   await requireAdmin();
-  const dup = await prisma.product.findUnique({ where: { slug: input.slug } });
+  const dup = await prisma.product.findUnique({ where: { storeId_slug: { storeId: ORIGINAL_STORE_ID, slug: input.slug } } });
   if (dup) throw new ApiError(409, "Ya existe un producto con ese slug");
   const created = await prisma.product.create({ data: baseData(input) });
   await upsertExtras(created.id, input);
@@ -257,7 +260,7 @@ export async function updateProduct(
 
 export async function deleteProduct(id: string): Promise<void> {
   await requireAdmin();
-  await prisma.product.delete({ where: { id } }).catch(() => {
+  await prisma.$transaction((tx) => removeProduct(tx, id)).catch(() => {
     throw new ApiError(404, "Producto no encontrado");
   });
 }

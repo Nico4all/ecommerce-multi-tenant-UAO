@@ -1,7 +1,9 @@
+import { ORIGINAL_STORE_ID } from "../../../../prisma/stores";
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "../auth";
 import { ApiError } from "../api-helpers";
+import { removeCategory } from "../catalog-deletion";
 
 export interface AdminCategoryRow {
   slug: string;
@@ -41,7 +43,7 @@ export async function listAdminCategories(): Promise<AdminCategoryRow[]> {
 
 export async function createCategory(input: CategoryInput) {
   await requireAdmin();
-  const dup = await prisma.category.findUnique({ where: { slug: input.slug } });
+  const dup = await prisma.category.findUnique({ where: { storeId_slug: { storeId: ORIGINAL_STORE_ID, slug: input.slug } } });
   if (dup) throw new ApiError(409, "Ya existe una categoría con ese slug");
   return prisma.category.create({
     data: {
@@ -56,7 +58,7 @@ export async function updateCategory(slug: string, input: Omit<CategoryInput, "s
   await requireAdmin();
   const updated = await prisma.category
     .update({
-      where: { slug },
+      where: { storeId_slug: { storeId: ORIGINAL_STORE_ID, slug } },
       data: {
         ...input,
         imageUrl: input.imageUrl || null,
@@ -77,7 +79,7 @@ export async function deleteCategory(slug: string): Promise<void> {
       `No puedes eliminar esta categoría: tiene ${count} producto(s). Muévelos primero.`,
     );
   }
-  await prisma.category.delete({ where: { slug } }).catch(() => {
+  await prisma.$transaction((tx) => removeCategory(tx, slug)).catch(() => {
     throw new ApiError(404, "Categoría no encontrada");
   });
 }

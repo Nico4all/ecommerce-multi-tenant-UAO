@@ -23,12 +23,14 @@
 # misc
 .DS_Store
 *.pem
+/.claude/
 
 # imágenes subidas desde el panel (los archivos no se versionan; en la BD
 # solo queda su ruta)
 /uploads
 
 # debug
+/.npm-cache/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
