@@ -82,9 +82,13 @@ export function CategoryNav({ categories }: { categories: Category[] }) {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {/* A partir de `sm` el chip de ofertas recorta la tira y la última
+            categoría queda partida a media palabra, que se lee como un fallo.
+            El degradado la desvanece contra el borde, que es como se señala
+            que hay más contenido al que desplazarse. */}
         <nav
           aria-label="Categorías destacadas"
-          className="no-scrollbar flex flex-1 items-center gap-1 overflow-x-auto"
+          className="no-scrollbar flex flex-1 items-center gap-1 overflow-x-auto sm:[mask-image:linear-gradient(to_right,#000_calc(100%-2.5rem),transparent)]"
         >
           {categories.map((c) => {
             const href = `/category/${c.slug}`;

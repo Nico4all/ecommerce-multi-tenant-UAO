@@ -10,6 +10,7 @@ import {
   LogOut,
   LayoutDashboard,
   UserCog,
+  Flame,
 } from "lucide-react";
 import { toast } from "sonner";
 import { buttonVariants } from "@/components/ui/button";
@@ -167,7 +168,22 @@ export function MobileNav({
         </div>
 
         <div className="px-3 pb-6">
-          <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {/* El chip de ofertas de la barra de categorías se esconde por
+              debajo de `sm`, así que sin esto el móvil se quedaba sin ninguna
+              entrada a /deals. */}
+          <SheetClose
+            nativeButton={false}
+            render={
+              <Link
+                href="/deals"
+                className="mt-2 flex items-center gap-3 rounded-md bg-deal/15 px-3 py-2.5 text-sm font-semibold text-foreground hover:bg-deal hover:text-deal-foreground"
+              />
+            }
+          >
+            <Flame className="size-4" /> Mejores ofertas
+          </SheetClose>
+
+          <p className="px-3 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Categorías
           </p>
           <div className="flex flex-col gap-1">
