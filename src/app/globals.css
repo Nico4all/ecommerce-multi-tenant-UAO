@@ -42,6 +42,8 @@
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
   --color-brand-soft: var(--brand-soft);
+  --color-media: var(--media);
+  --color-media-foreground: var(--media-foreground);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
@@ -116,6 +118,15 @@
   --brand: var(--uao-red);
   --brand-foreground: var(--uao-white);
   --brand-soft: color-mix(in oklab, var(--uao-red) 8%, var(--uao-white));
+
+  /* Superficies que SIEMPRE se apoyan sobre media oscura: la foto de un
+     banner bajo su velo, o el degradado que elige el administrador. Su
+     contraste no depende del tema, así que estos dos tokens son fijos y NO
+     se redefinen en `.dark`; si siguieran al tema, el chip de un banner se
+     volvería oscuro sobre un degradado oscuro. Crema sobre negro rinde
+     19.4:1 y la tinta sobre crema 16.9:1. */
+  --media: var(--uao-cream);
+  --media-foreground: var(--uao-ink);
 
   /* Interactivo con texto pequeño: subordinado #AC0B32 → 7.4:1 sobre blanco. */
   --primary: var(--uao-burgundy);
