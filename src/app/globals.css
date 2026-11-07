@@ -22,6 +22,7 @@
   --color-sidebar: var(--sidebar);
   --color-deal: var(--deal);
   --color-deal-foreground: var(--deal-foreground);
+  --color-deal-ink: var(--deal-ink);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
   --color-chart-5: var(--chart-5);
@@ -92,6 +93,14 @@
   --uao-accent-teal: #00c6a1;
   --uao-accent-red: #ff4503;
 
+  /* Derivado del acento naranja para poder usarlo como TEXTO. El acento a su
+     valor de manual rinde 2.16:1 sobre blanco y 2.00:1 sobre crema: sirve
+     como relleno, pero de letra queda muy por debajo del 4.5:1 que pide WCAG
+     1.4.3, y del 3:1 de 1.4.11 para iconos. Este oscurecido conserva el matiz
+     y llega a 5.15:1 sobre blanco y 4.75:1 sobre crema. NO es un color del
+     manual: es una derivacion, igual que los neutros de abajo. */
+  --uao-accent-orange-ink: #9f5e00;
+
   /* Neutros derivados: NO son colores de marca. Tinta cálida para texto y
      superficies de modo oscuro, obtenidas de la familia del subordinado
      #8A1428 para no introducir un matiz ajeno a la paleta. */
@@ -141,9 +150,14 @@
   --accent: color-mix(in oklab, var(--uao-coral) 20%, var(--uao-white));
   --accent-foreground: var(--uao-dark);
 
-  /* Ofertas: acento naranja con tinta oscura (8.6:1). */
+  /* Ofertas. El par --deal/--deal-foreground es para RELLENOS: la tinta
+     sobre el naranja rinde 8.44:1. Cuando el color de oferta tiene que ser
+     la letra o un icono sobre la pagina va --deal-ink, porque el naranja
+     suelto se queda en 2.16:1 sobre blanco y 2.00:1 sobre crema. Al reves
+     no: --deal-ink es tinta, no trae un color de texto que lo acompane. */
   --deal: var(--uao-accent-orange);
   --deal-foreground: var(--uao-ink);
+  --deal-ink: var(--uao-accent-orange-ink);
 
   --success: var(--uao-accent-teal);
   --success-foreground: var(--uao-ink);
@@ -204,6 +218,10 @@
 
   --deal: var(--uao-accent-orange);
   --deal-foreground: var(--uao-ink);
+  /* Sobre la noche el acento ya rinde 8.87:1 como texto, y 8.37:1 sobre la
+     superficie elevada: aqui la tinta de oferta es el acento mismo, porque
+     oscurecerlo lo haria desaparecer contra el fondo. */
+  --deal-ink: var(--uao-accent-orange);
 
   --success: var(--uao-accent-teal);
   --success-foreground: var(--uao-ink);

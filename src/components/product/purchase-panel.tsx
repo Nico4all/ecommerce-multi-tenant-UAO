@@ -165,7 +165,7 @@ export function PurchasePanel({
         <Button
           size="lg"
           variant="outline"
-          className="h-11 gap-2 border-deal/40 text-base text-deal hover:bg-deal/10 hover:text-deal"
+          className="h-11 gap-2 border-deal-ink text-base text-deal-ink hover:border-deal hover:bg-deal hover:text-deal-foreground"
           onClick={() => addToCart("buy")}
           disabled={outOfStock || loading !== null}
         >

@@ -113,7 +113,7 @@ export function OffersManager({ products }: { products: AdminProductRow[] }) {
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Tag className="size-4 text-deal" /> Productos en oferta
+            <Tag className="size-4 text-deal-ink" /> Productos en oferta
           </div>
           <p className="mt-2 font-heading text-2xl font-bold tabular-nums">
             {active.length}
@@ -121,7 +121,7 @@ export function OffersManager({ products }: { products: AdminProductRow[] }) {
         </div>
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Percent className="size-4 text-deal" /> Descuento promedio
+            <Percent className="size-4 text-deal-ink" /> Descuento promedio
           </div>
           <p className="mt-2 font-heading text-2xl font-bold tabular-nums">
             {avgDiscount}%
@@ -202,7 +202,7 @@ export function OffersManager({ products }: { products: AdminProductRow[] }) {
                     </TableCell>
                     <TableCell className="text-right">
                       {st.offerActive ? (
-                        <span className="font-semibold text-deal tabular-nums">
+                        <span className="font-semibold text-deal-ink tabular-nums">
                           -{pct}%
                         </span>
                       ) : (

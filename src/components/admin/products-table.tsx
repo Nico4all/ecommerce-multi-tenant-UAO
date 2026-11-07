@@ -141,7 +141,7 @@ export function ProductsTable({
                 <TableCell className="text-right tabular-nums">
                   {p.offerActive && p.offerPrice !== null ? (
                     <span>
-                      <span className="font-medium text-deal">
+                      <span className="font-medium text-deal-ink">
                         {formatPrice(p.offerPrice)}
                       </span>{" "}
                       <span className="text-xs text-muted-foreground line-through">

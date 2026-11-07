@@ -46,9 +46,9 @@ export function WishlistHeart({
       type="button"
       onClick={toggle}
       aria-label={`${active ? "Quitar" : "Agregar"} ${productName} ${active ? "de" : "a"} favoritos`}
-      className="absolute right-4 top-4 z-10 grid size-8 place-items-center rounded-full bg-background/80 text-muted-foreground backdrop-blur transition-colors hover:text-deal focus-visible:outline-2 focus-visible:outline-ring"
+      className="absolute right-4 top-4 z-10 grid size-8 place-items-center rounded-full bg-background/80 text-muted-foreground backdrop-blur transition-colors hover:text-brand focus-visible:outline-2 focus-visible:outline-ring"
     >
-      <Heart className={cn("size-4", active && "fill-deal text-deal")} />
+      <Heart className={cn("size-4", active && "fill-brand text-brand")} />
     </button>
   );
 }

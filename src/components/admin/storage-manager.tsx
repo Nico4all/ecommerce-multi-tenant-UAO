@@ -178,7 +178,7 @@ function Stat({
       <p
         className={
           "font-heading text-2xl font-bold tabular-nums " +
-          (highlight ? "text-deal" : "")
+          (highlight ? "text-deal-ink" : "")
         }
       >
         {value}

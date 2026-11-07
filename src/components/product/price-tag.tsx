@@ -31,7 +31,7 @@ export function PriceTag({
         </span>
       )}
       {off && (
-        <span className="text-xs font-semibold text-deal tabular-nums">
+        <span className="text-xs font-semibold text-deal-ink tabular-nums">
           -{off}%
         </span>
       )}
