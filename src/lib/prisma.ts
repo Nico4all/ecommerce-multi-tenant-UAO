@@ -1,7 +1,8 @@
 import "server-only";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { PrismaClient } from "@/generated/prisma/client";
-import { legacyStoreClient } from "./server/store-client";
+import { storeScopedClient } from "./server/store-client";
+import { requestStoreResolvers } from "./server/request-store";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -19,6 +20,9 @@ function createClient() {
 }
 
 const client = globalForPrisma.prisma ?? createClient();
-export const prisma = legacyStoreClient(client);
+const requests = requestStoreResolvers(client);
+export const getStoreContext = requests.getContext;
+export const resolveStoreRequest = requests.resolveRequest;
+export const prisma = storeScopedClient(client, getStoreContext);
 
 if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = client;

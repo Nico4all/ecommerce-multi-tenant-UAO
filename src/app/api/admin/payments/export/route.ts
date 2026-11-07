@@ -5,9 +5,10 @@ import {
   PAYMENT_STATUS_LABEL,
 } from "@/lib/order-status";
 import { csvResponse, today } from "@/lib/server/csv";
+import { withErrorHandling } from "@/lib/server/api-helpers";
 
 /** Exporta todas las transacciones a CSV (botón "Exportar CSV" de /admin/payments). */
-export async function GET() {
+export const GET = withErrorHandling(async () => {
   try {
     await requireAdmin();
   } catch {
@@ -27,4 +28,4 @@ export async function GET() {
       p.amount,
     ]),
   );
-}
+});

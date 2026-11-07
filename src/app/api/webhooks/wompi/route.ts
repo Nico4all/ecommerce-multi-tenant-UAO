@@ -3,6 +3,7 @@ import {
   applyWompiTransaction,
   type WompiTransaction,
 } from "@/lib/server/wompi";
+import { withErrorHandling } from "@/lib/server/api-helpers";
 
 /**
  * Webhook de eventos de Wompi (la fuente de verdad del estado de un pago).
@@ -16,7 +17,7 @@ import {
  * (cloudflared/ngrok) apuntando la "URL de eventos" del panel de Wompi a
  * https://<túnel>/api/webhooks/wompi
  */
-export async function POST(req: Request) {
+export const POST = withErrorHandling(async (req: Request) => {
   let event: Parameters<typeof verifyWompiEvent>[0] & {
     event?: string;
     data?: { transaction?: WompiTransaction };
@@ -42,4 +43,4 @@ export async function POST(req: Request) {
   }
 
   return Response.json({ ok: true });
-}
+});

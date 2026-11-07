@@ -1,7 +1,10 @@
 import type { MetadataRoute } from "next";
-import { SITE_URL } from "@/lib/seo";
+import { getStoreContext } from "@/lib/prisma";
 
-export default function robots(): MetadataRoute.Robots {
+export const dynamic = "force-dynamic";
+
+export default async function robots(): Promise<MetadataRoute.Robots> {
+  const { origin } = await getStoreContext();
   return {
     rules: {
       userAgent: "*",
@@ -21,7 +24,7 @@ export default function robots(): MetadataRoute.Robots {
         "/wishlist",
       ],
     },
-    sitemap: `${SITE_URL}/sitemap.xml`,
-    host: SITE_URL,
+    sitemap: `${origin}/sitemap.xml`,
+    host: origin,
   };
 }

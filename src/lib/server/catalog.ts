@@ -1,6 +1,5 @@
-import { ORIGINAL_STORE_ID } from "../../../prisma/stores";
 import "server-only";
-import { prisma } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import { toDomainProduct, PRODUCT_GALLERY_INCLUDE } from "./mappers";
 import type { Product } from "@/types";
 
@@ -44,7 +43,7 @@ export async function getProductDetail(
   slug: string,
 ): Promise<ProductDetail | null> {
   const row = await prisma.product.findUnique({
-    where: { storeId_slug: { storeId: ORIGINAL_STORE_ID, slug } },
+    where: { storeId_slug: { storeId: (await getStoreContext()).id, slug } },
     include: {
       ...PRODUCT_GALLERY_INCLUDE,
       specs: { orderBy: { sortOrder: "asc" } },

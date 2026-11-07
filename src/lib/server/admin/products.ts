@@ -1,6 +1,5 @@
-import { ORIGINAL_STORE_ID } from "../../../../prisma/stores";
 import "server-only";
-import { prisma } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import { requireAdmin } from "../auth";
 import { ApiError } from "../api-helpers";
 import { detachVariants, removeProduct } from "../catalog-deletion";
@@ -234,7 +233,7 @@ function baseData(input: ProductInput) {
 
 export async function createProduct(input: ProductInput): Promise<AdminProductRow> {
   await requireAdmin();
-  const dup = await prisma.product.findUnique({ where: { storeId_slug: { storeId: ORIGINAL_STORE_ID, slug: input.slug } } });
+  const dup = await prisma.product.findUnique({ where: { storeId_slug: { storeId: (await getStoreContext()).id, slug: input.slug } } });
   if (dup) throw new ApiError(409, "Ya existe un producto con ese slug");
   const created = await prisma.product.create({ data: baseData(input) });
   await upsertExtras(created.id, input);

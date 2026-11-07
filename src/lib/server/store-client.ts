@@ -1,6 +1,7 @@
 import "server-only";
 import type { PrismaClient } from "../../generated/prisma/client";
 import { ORIGINAL_STORE_ID } from "../../../prisma/stores";
+import { resolveStoreContext, StoreContextError, type StoreContext } from "./store-context";
 
 const commercialModels = new Set([
   "Category", "Product", "ProductImage", "ProductSpec", "ProductVariant",
@@ -11,7 +12,7 @@ const commercialModels = new Set([
 
 const userCommerce = ["orders", "reviews", "wishlist", "carts", "redemptions", "emails", "support", "memberships"];
 
-function scopeUserReads(args: Record<string, unknown>) {
+function scopeUserReads(args: Record<string, unknown>, storeId: string) {
   for (const key of ["data", "create", "update"]) {
     const data = args[key] as Record<string, unknown> | undefined;
     if (data && userCommerce.some((relation) => relation in data)) {
@@ -26,7 +27,7 @@ function scopeUserReads(args: Record<string, unknown>) {
         const value = fields[relation];
         if (!value) continue;
         const options = value === true ? {} : value as Record<string, unknown>;
-        fields[relation] = { ...options, where: { ...(options.where as object), storeId: ORIGINAL_STORE_ID } };
+        fields[relation] = { ...options, where: { ...(options.where as object), storeId } };
       }
     };
     restrict(selection);
@@ -40,43 +41,58 @@ function scopeUserReads(args: Record<string, unknown>) {
   }
 }
 
-function assertStoreIds(value: unknown): void {
+function assertStoreIds(value: unknown, storeId: string): void {
   if (!value || typeof value !== "object") return;
   if (Array.isArray(value)) {
-    value.forEach(assertStoreIds);
+    value.forEach((item) => assertStoreIds(item, storeId));
     return;
   }
   for (const [key, item] of Object.entries(value)) {
-    if (key === "store" || (key === "storeId" && item !== ORIGINAL_STORE_ID)) {
+    if (key === "store" || (key === "storeId" && item !== storeId)) {
       throw new Error("El contexto de tienda no puede ser sustituido por el cliente");
     }
-    assertStoreIds(item);
+    assertStoreIds(item, storeId);
   }
 }
 
-/** Adaptador temporal del storefront original; no resuelve tiendas por headers. */
-export function legacyStoreClient(client: PrismaClient) {
+// Solo clonar objetos de argumentos: conservar Date, Decimal y binarios.
+function cloneArgs<T>(value: T): T {
+  if (Array.isArray(value)) return value.map(cloneArgs) as T;
+  if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, cloneArgs(item)])) as T;
+  }
+  return value;
+}
+
+function scopeNestedUsers(value: unknown, storeId: string): void {
+  if (!value || typeof value !== "object") return;
+  if (Array.isArray(value)) { value.forEach((item) => scopeNestedUsers(item, storeId)); return; }
+  if (Object.getPrototypeOf(value) !== Object.prototype) return;
+  for (const [key, item] of Object.entries(value)) {
+    if (key === "user" && item && typeof item === "object") scopeUserReads(item as Record<string, unknown>, storeId);
+    scopeNestedUsers(item, storeId);
+  }
+}
+
+export function storeScopedClient(client: PrismaClient, getContext: () => Promise<StoreContext>) {
+  const denyRaw = () => { throw new StoreContextError(403, "SQL directo no disponible en el cliente de tienda"); };
   return client.$extends({
-    name: "original-store",
+    name: "request-store",
     query: {
+      $queryRaw: denyRaw, $queryRawUnsafe: denyRaw,
+      $executeRaw: denyRaw, $executeRawUnsafe: denyRaw,
       $allModels: {
-        async $allOperations({ model, operation, args, query }) {
-          if (!commercialModels.has(model) && model !== "User") return query(args);
-          // E02 no habilita otras tiendas: una activación anticipada falla cerrada.
-          const active = await client.store.findMany({
-            where: { active: true },
-            select: { id: true, legacyKey: true },
-            take: 2,
-          });
-          if (active.length !== 1 || active[0].id !== ORIGINAL_STORE_ID ||
-              active[0].legacyKey !== "original") {
-            throw new Error("El storefront original requiere una única tienda activa validada");
-          }
-          assertStoreIds(args);
+        async $allOperations({ model, operation, args: originalArgs, query }) {
+          const { id: storeId } = await getContext();
+          const args = cloneArgs(originalArgs);
+          if (model === "Store") throw new StoreContextError(403, "La plataforma no se consulta desde el cliente de tienda");
+          assertStoreIds(args, storeId);
+          scopeNestedUsers(args, storeId);
           if (model === "User") {
-            scopeUserReads(args as unknown as Record<string, unknown>);
+            scopeUserReads(args as unknown as Record<string, unknown>, storeId);
             return query(args);
           }
+          if (!commercialModels.has(model) && !["StoreDomain", "StoreMembership", "StoreSettings"].includes(model)) return query(args);
           const scoped = args as unknown as {
             where?: Record<string, unknown>;
             data?: Record<string, unknown> | Record<string, unknown>[];
@@ -84,15 +100,15 @@ export function legacyStoreClient(client: PrismaClient) {
             update?: Record<string, unknown>;
           };
           if (operation !== "create" && operation !== "createMany") {
-            scoped.where = { ...scoped.where, storeId: ORIGINAL_STORE_ID };
+            scoped.where = { ...scoped.where, storeId };
           }
           if (scoped.data) {
             scoped.data = Array.isArray(scoped.data)
-              ? scoped.data.map((row) => ({ ...row, storeId: ORIGINAL_STORE_ID }))
-              : { ...scoped.data, storeId: ORIGINAL_STORE_ID };
+              ? scoped.data.map((row) => ({ ...row, storeId }))
+              : { ...scoped.data, storeId };
           }
-          if (scoped.create) scoped.create = { ...scoped.create, storeId: ORIGINAL_STORE_ID };
-          if (scoped.update) scoped.update = { ...scoped.update, storeId: ORIGINAL_STORE_ID };
+          if (scoped.create) scoped.create = { ...scoped.create, storeId };
+          if (scoped.update) scoped.update = { ...scoped.update, storeId };
           return query(args);
         },
       },
@@ -100,5 +116,16 @@ export function legacyStoreClient(client: PrismaClient) {
   });
 }
 
-export type LegacyTransaction = Omit<ReturnType<typeof legacyStoreClient>,
+/** Compatibilidad del ensayo histórico E02; la aplicación usa storeScopedClient. */
+export function legacyStoreClient(client: PrismaClient) {
+  return storeScopedClient(client, async () => {
+    const active = await client.store.findMany({ where: { active: true }, select: { id: true, legacyKey: true }, take: 2 });
+    if (active.length !== 1 || active[0].id !== ORIGINAL_STORE_ID || active[0].legacyKey !== "original") {
+      throw new Error("El storefront original requiere una única tienda activa validada");
+    }
+    return resolveStoreContext(client, new Headers({ host: "localhost" }), { environment: "development" });
+  });
+}
+
+export type LegacyTransaction = Omit<ReturnType<typeof storeScopedClient>,
   "$connect" | "$disconnect" | "$transaction" | "$extends">;

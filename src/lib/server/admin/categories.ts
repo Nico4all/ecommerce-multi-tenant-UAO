@@ -1,6 +1,5 @@
-import { ORIGINAL_STORE_ID } from "../../../../prisma/stores";
 import "server-only";
-import { prisma } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import { requireAdmin } from "../auth";
 import { ApiError } from "../api-helpers";
 import { removeCategory } from "../catalog-deletion";
@@ -43,7 +42,7 @@ export async function listAdminCategories(): Promise<AdminCategoryRow[]> {
 
 export async function createCategory(input: CategoryInput) {
   await requireAdmin();
-  const dup = await prisma.category.findUnique({ where: { storeId_slug: { storeId: ORIGINAL_STORE_ID, slug: input.slug } } });
+  const dup = await prisma.category.findUnique({ where: { storeId_slug: { storeId: (await getStoreContext()).id, slug: input.slug } } });
   if (dup) throw new ApiError(409, "Ya existe una categoría con ese slug");
   return prisma.category.create({
     data: {
@@ -58,7 +57,7 @@ export async function updateCategory(slug: string, input: Omit<CategoryInput, "s
   await requireAdmin();
   const updated = await prisma.category
     .update({
-      where: { storeId_slug: { storeId: ORIGINAL_STORE_ID, slug } },
+      where: { storeId_slug: { storeId: (await getStoreContext()).id, slug } },
       data: {
         ...input,
         imageUrl: input.imageUrl || null,

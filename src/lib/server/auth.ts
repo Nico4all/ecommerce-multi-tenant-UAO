@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { ApiError } from "./api-helpers";
+import { getStoreContext } from "@/lib/prisma";
 
 export const SESSION_COOKIE = "vlp_session";
 const MAX_AGE = 60 * 60 * 24 * 7; // 7 días
@@ -54,6 +55,7 @@ export async function createSession(user: SessionUser) {
 
 /** Usuario de la sesión actual, o null. Seguro de llamar desde RSC. */
 export async function getSession(): Promise<SessionUser | null> {
+  await getStoreContext();
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
   try {

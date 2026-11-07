@@ -1,6 +1,5 @@
 import "server-only";
-import { ORIGINAL_STORE_ID } from "../../../prisma/stores";
-import { prisma } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import { ApiError } from "./api-helpers";
 import { getSession, requireUser } from "./auth";
 import { notifyReviewCreated } from "./notifications";
@@ -58,7 +57,7 @@ export async function submitReview(
   const user = await requireUser();
 
   const product = await prisma.product.findUnique({
-    where: { storeId_slug: { storeId: ORIGINAL_STORE_ID, slug } },
+    where: { storeId_slug: { storeId: (await getStoreContext()).id, slug } },
     select: { id: true, name: true },
   });
   if (!product) throw new ApiError(404, "Producto no encontrado");

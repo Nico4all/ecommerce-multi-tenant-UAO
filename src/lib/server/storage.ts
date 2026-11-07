@@ -1,7 +1,9 @@
 import "server-only";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { mkdir, writeFile, readFile, readdir, stat, unlink } from "node:fs/promises";
 import path from "node:path";
+import { getStoreContext } from "@/lib/prisma";
+import { ORIGINAL_STORE_ID } from "../../../prisma/stores";
 
 /**
  * Almacenamiento de archivos subidos desde el panel.
@@ -20,6 +22,17 @@ const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 /** Prefijo público. Debe coincidir con la ruta del route handler que sirve. */
 export const PUBLIC_PREFIX = "/api/uploads";
 
+export function storeUploadPrefix(storeId: string) {
+  return `stores/${createHash("sha256").update(storeId).digest("hex")}/`;
+}
+
+export function uploadKeyBelongsToStore(key: string, storeId: string): boolean {
+  if (key.includes("\\") || key.split("/").some((part) => !part || part === "." || part === "..")) return false;
+  if (key.startsWith("stores/")) return key.startsWith(storeUploadPrefix(storeId));
+  // Antes de E03 únicamente existía el almacén de la tienda original.
+  return storeId === ORIGINAL_STORE_ID && /^\d{4}-\d{2}\/[^/]+$/.test(key);
+}
+
 /**
  * Resuelve una ruta relativa dentro de `uploads/` y verifica que no se escape.
  * Sin esto, un `../../.env` en la URL leería archivos del servidor.
@@ -37,11 +50,13 @@ export async function saveUpload(
   data: Buffer,
   ext: string,
 ): Promise<{ url: string; key: string }> {
+  const store = await getStoreContext();
+  if (!/^[a-z\d]+$/i.test(ext)) throw new Error("Extensión de subida inválida");
   // Se agrupa por año-mes para que la carpeta no acabe con miles de archivos.
   const now = new Date();
   const folder = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   const name = `${randomUUID()}.${ext}`;
-  const key = `${folder}/${name}`;
+  const key = `${storeUploadPrefix(store.id)}${folder}/${name}`;
 
   const target = resolveUploadPath(key);
   if (!target) throw new Error("Ruta de subida inválida");
@@ -54,6 +69,8 @@ export async function saveUpload(
 
 /** Lee un archivo ya subido. `null` si no existe o si la ruta se sale. */
 export async function readUpload(relative: string): Promise<Buffer | null> {
+  const store = await getStoreContext();
+  if (!uploadKeyBelongsToStore(relative, store.id)) return null;
   const target = resolveUploadPath(relative);
   if (!target) return null;
   try {
@@ -88,6 +105,7 @@ export interface UploadEntry {
  * año-mes) con su tamaño. Carpeta inexistente o vacía => `[]`.
  */
 export async function listUploads(): Promise<UploadEntry[]> {
+  const store = await getStoreContext();
   let entries: string[];
   try {
     // Sin `withFileTypes`: devuelve rutas relativas a UPLOAD_DIR (con separador
@@ -99,11 +117,13 @@ export async function listUploads(): Promise<UploadEntry[]> {
 
   const out: UploadEntry[] = [];
   for (const entry of entries) {
+    const key = entry.split(path.sep).join("/");
+    if (!uploadKeyBelongsToStore(key, store.id)) continue;
     const abs = path.join(UPLOAD_DIR, entry);
     try {
       const info = await stat(abs);
       if (!info.isFile()) continue; // se saltan las carpetas año-mes
-      out.push({ key: entry.split(path.sep).join("/"), size: info.size });
+      out.push({ key, size: info.size });
     } catch {
       // desapareció entre el listado y el stat: se ignora
     }
@@ -113,6 +133,8 @@ export async function listUploads(): Promise<UploadEntry[]> {
 
 /** Borra un archivo subido. `true` si se borró, `false` si no existía o la ruta se sale. */
 export async function deleteUpload(key: string): Promise<boolean> {
+  const store = await getStoreContext();
+  if (!uploadKeyBelongsToStore(key, store.id)) return false;
   const target = resolveUploadPath(key);
   if (!target) return false;
   try {

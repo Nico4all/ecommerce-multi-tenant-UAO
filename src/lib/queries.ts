@@ -1,7 +1,6 @@
-import { ORIGINAL_STORE_ID } from "../../prisma/stores";
 import "server-only";
 import { connection } from "next/server";
-import { prisma } from "./prisma";
+import { prisma, getStoreContext } from "./prisma";
 import { toDomainProduct as toProduct, PRODUCT_IMAGE_INCLUDE } from "./server/mappers";
 import type { Category, Product } from "@/types";
 
@@ -61,7 +60,7 @@ export async function getCategories(): Promise<Category[]> {
 
 export async function getCategory(slug: string): Promise<Category | null> {
   await connection();
-  const row = await prisma.category.findUnique({ where: { storeId_slug: { storeId: ORIGINAL_STORE_ID, slug } } });
+  const row = await prisma.category.findUnique({ where: { storeId_slug: { storeId: (await getStoreContext()).id, slug } } });
   return (row as Category) ?? null;
 }
 
@@ -91,7 +90,7 @@ export async function getProducts(query: ProductQuery = {}): Promise<Product[]> 
 export async function getProduct(slug: string): Promise<Product | null> {
   await connection();
   const row = await prisma.product.findUnique({
-    where: { storeId_slug: { storeId: ORIGINAL_STORE_ID, slug } },
+    where: { storeId_slug: { storeId: (await getStoreContext()).id, slug } },
     include: PRODUCT_IMAGE_INCLUDE,
   });
   return row ? toProduct(row) : null;

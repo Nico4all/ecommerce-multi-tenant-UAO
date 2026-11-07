@@ -1,6 +1,5 @@
 import type { MetadataRoute } from "next";
-import { prisma } from "@/lib/prisma";
-import { SITE_URL, absoluteUrl } from "@/lib/seo";
+import { prisma, getStoreContext } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
@@ -22,8 +21,9 @@ const publicRoutes: Array<{
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+  const { origin } = await getStoreContext();
   const staticEntries: MetadataRoute.Sitemap = publicRoutes.map((route) => ({
-    url: absoluteUrl(route.path),
+    url: new URL(route.path, origin).toString(),
     changeFrequency: route.changeFrequency,
     priority: route.priority,
   }));
@@ -40,12 +40,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     return [
       ...staticEntries,
       ...categories.map((category) => ({
-        url: `${SITE_URL}/category/${encodeURIComponent(category.slug)}`,
+        url: `${origin}/category/${encodeURIComponent(category.slug)}`,
         changeFrequency: "weekly" as const,
         priority: 0.7,
       })),
       ...products.map((product) => ({
-        url: `${SITE_URL}/product/${encodeURIComponent(product.slug)}`,
+        url: `${origin}/product/${encodeURIComponent(product.slug)}`,
         lastModified: product.updatedAt,
         changeFrequency: "weekly" as const,
         priority: 0.8,

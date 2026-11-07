@@ -2,9 +2,10 @@ import { requireAdmin } from "@/lib/server/auth";
 import { listAdminOrders } from "@/lib/server/admin/orders";
 import { ORDER_STATUS_LABEL, PAYMENT_METHOD_LABEL } from "@/lib/order-status";
 import { csvResponse, today } from "@/lib/server/csv";
+import { withErrorHandling } from "@/lib/server/api-helpers";
 
 /** Exporta todos los pedidos a CSV (botón "Exportar" del dashboard). */
-export async function GET() {
+export const GET = withErrorHandling(async () => {
   try {
     await requireAdmin();
   } catch {
@@ -25,4 +26,4 @@ export async function GET() {
       o.total,
     ]),
   );
-}
+});

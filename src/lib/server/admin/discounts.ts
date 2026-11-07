@@ -1,6 +1,5 @@
-import { ORIGINAL_STORE_ID } from "../../../../prisma/stores";
 import "server-only";
-import { prisma } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import { requireAdmin } from "../auth";
 import { ApiError } from "../api-helpers";
 
@@ -87,7 +86,7 @@ export async function listAdminDiscounts(): Promise<AdminDiscountRow[]> {
 export async function createDiscount(input: DiscountInput): Promise<AdminDiscountRow> {
   await requireAdmin();
   const data = toData(input);
-  const dup = await prisma.discountCode.findUnique({ where: { storeId_code: { storeId: ORIGINAL_STORE_ID, code: data.code } } });
+  const dup = await prisma.discountCode.findUnique({ where: { storeId_code: { storeId: (await getStoreContext()).id, code: data.code } } });
   if (dup) throw new ApiError(409, "Ya existe un descuento con ese código");
   return toRow(await prisma.discountCode.create({ data }));
 }
