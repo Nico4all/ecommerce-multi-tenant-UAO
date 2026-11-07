@@ -42,13 +42,16 @@ export interface ProductDetail {
 export async function getProductDetail(
   slug: string,
 ): Promise<ProductDetail | null> {
+  const { id: storeId } = await getStoreContext();
   const row = await prisma.product.findUnique({
-    where: { storeId_slug: { storeId: (await getStoreContext()).id, slug } },
+    where: { storeId_slug: { storeId, slug }, status: "PUBLISHED" },
     include: {
       ...PRODUCT_GALLERY_INCLUDE,
-      specs: { orderBy: { sortOrder: "asc" } },
-      variants: { orderBy: { sortOrder: "asc" } },
+      images: { ...PRODUCT_GALLERY_INCLUDE.images, where: { storeId } },
+      specs: { where: { storeId }, orderBy: { sortOrder: "asc" } },
+      variants: { where: { storeId }, orderBy: { sortOrder: "asc" } },
       reviews: {
+        where: { storeId },
         orderBy: { createdAt: "desc" },
         take: 10,
         include: { user: { select: { name: true } } },

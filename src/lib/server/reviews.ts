@@ -17,11 +17,12 @@ export interface ReviewEligibility {
   myReview: { rating: number; body: string } | null;
 }
 
-async function hasPurchased(userId: string, productId: string) {
+async function hasPurchased(userId: string, productId: string, storeId: string) {
   const item = await prisma.orderItem.findFirst({
     where: {
+      storeId,
       productId,
-      order: { userId, status: { not: "CANCELLED" } },
+      order: { storeId, userId, status: { not: "CANCELLED" } },
     },
     select: { id: true },
   });
@@ -36,10 +37,16 @@ export async function getReviewEligibility(
     return { canReview: false, reason: "not-logged", myReview: null };
   }
 
+  const { id: storeId } = await getStoreContext();
+  const product = await prisma.product.findFirst({
+    where: { storeId, id: productId, status: "PUBLISHED" }, select: { id: true },
+  });
+  if (!product) return { canReview: false, reason: "not-purchased", myReview: null };
+
   const [purchased, existing] = await Promise.all([
-    hasPurchased(session.id, productId),
+    hasPurchased(session.id, productId, storeId),
     prisma.review.findUnique({
-      where: { productId_userId: { productId, userId: session.id } },
+      where: { storeId, productId_userId: { productId, userId: session.id } },
       select: { rating: true, body: true },
     }),
   ]);
@@ -55,14 +62,15 @@ export async function submitReview(
   input: { rating: number; body: string },
 ): Promise<{ rating: number; body: string }> {
   const user = await requireUser();
+  const { id: storeId } = await getStoreContext();
 
   const product = await prisma.product.findUnique({
-    where: { storeId_slug: { storeId: (await getStoreContext()).id, slug } },
+    where: { storeId_slug: { storeId, slug }, status: "PUBLISHED" },
     select: { id: true, name: true },
   });
   if (!product) throw new ApiError(404, "Producto no encontrado");
 
-  if (!(await hasPurchased(user.id, product.id))) {
+  if (!(await hasPurchased(user.id, product.id, storeId))) {
     throw new ApiError(
       403,
       "Solo quienes compraron este producto pueden reseñarlo",
@@ -72,16 +80,18 @@ export async function submitReview(
   // Se consulta antes del upsert para saber si es una reseña nueva o una
   // edición de la propia: editar no es noticia para el panel.
   const existing = await prisma.review.findUnique({
-    where: { productId_userId: { productId: product.id, userId: user.id } },
+    where: { storeId, productId_userId: { productId: product.id, userId: user.id } },
     select: { id: true },
   });
 
   const review = await prisma.review.upsert({
     where: {
+      storeId,
       productId_userId: { productId: product.id, userId: user.id },
     },
     update: { rating: input.rating, body: input.body },
     create: {
+      storeId,
       productId: product.id,
       userId: user.id,
       rating: input.rating,
@@ -91,12 +101,12 @@ export async function submitReview(
 
   // Recalcular la cache de rating del producto.
   const agg = await prisma.review.aggregate({
-    where: { productId: product.id },
+    where: { storeId, productId: product.id },
     _avg: { rating: true },
     _count: true,
   });
   await prisma.product.update({
-    where: { id: product.id },
+    where: { storeId, id: product.id },
     data: {
       ratingAvg: Math.round((agg._avg.rating ?? 0) * 10) / 10,
       reviewCount: agg._count,

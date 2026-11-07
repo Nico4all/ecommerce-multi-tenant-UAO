@@ -1,5 +1,5 @@
 import "server-only";
-import { prisma } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import type { Banner } from "@/types";
 
 export interface HomeBanners {
@@ -40,8 +40,9 @@ function toBanner(b: DbBanner): Banner {
  * (nunca se inventan banners de ejemplo).
  */
 export async function getHomeBanners(): Promise<HomeBanners> {
+  const { id: storeId } = await getStoreContext();
   const rows = await prisma.banner.findMany({
-    where: { active: true },
+    where: { storeId, active: true },
     orderBy: { sortOrder: "asc" },
   });
   // TODAS las activas de cada ubicación (añadir otra nunca "reemplaza").

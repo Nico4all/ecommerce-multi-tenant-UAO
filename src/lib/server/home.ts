@@ -1,5 +1,5 @@
 import "server-only";
-import { prisma } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import { toDomainProduct, PRODUCT_IMAGE_INCLUDE } from "./mappers";
 import { getProducts, getCategories } from "@/lib/queries";
 import type { Banner, Category, Product } from "@/types";
@@ -96,32 +96,33 @@ function defaultHref(source: ProductSource | null, categorySlug: string | null) 
   return "/search";
 }
 
-async function productsFor(section: HomeSectionConfig): Promise<Product[]> {
+async function productsFor(section: HomeSectionConfig, storeId: string): Promise<Product[]> {
   const take = section.maxItems || 5;
   switch (section.source) {
     case "OFFERS":
       return (await getProducts({ onlyDeals: true, sort: "discount" })).slice(0, take);
     case "CATEGORY":
+      if (!section.categorySlug) return [];
       return (
-        await getProducts({ category: section.categorySlug ?? undefined })
+        await getProducts({ category: section.categorySlug })
       ).slice(0, take);
     case "TOP_RATED":
       return (await getProducts({ sort: "rating" })).slice(0, take);
     case "FEATURED": {
       const rows = await prisma.product.findMany({
-        where: { status: "PUBLISHED", featured: true },
+        where: { storeId, status: "PUBLISHED", featured: true },
         take,
         orderBy: { createdAt: "desc" },
-        include: PRODUCT_IMAGE_INCLUDE,
+        include: { images: { ...PRODUCT_IMAGE_INCLUDE.images, where: { storeId } } },
       });
       return rows.map(toDomainProduct);
     }
     case "NEWEST": {
       const rows = await prisma.product.findMany({
-        where: { status: "PUBLISHED" },
+        where: { storeId, status: "PUBLISHED" },
         take,
         orderBy: { createdAt: "desc" },
-        include: PRODUCT_IMAGE_INCLUDE,
+        include: { images: { ...PRODUCT_IMAGE_INCLUDE.images, where: { storeId } } },
       });
       return rows.map(toDomainProduct);
     }
@@ -132,8 +133,9 @@ async function productsFor(section: HomeSectionConfig): Promise<Product[]> {
 
 /** Secciones activas resueltas, en orden. */
 export async function getHomeLayout(): Promise<ResolvedSection[]> {
+  const { id: storeId } = await getStoreContext();
   const sections = await prisma.homeSection.findMany({
-    where: { active: true },
+    where: { storeId, active: true },
     orderBy: { sortOrder: "asc" },
   });
 
@@ -143,6 +145,7 @@ export async function getHomeLayout(): Promise<ResolvedSection[]> {
         case "HERO": {
           const rows = await prisma.banner.findMany({
             where: {
+              storeId,
               active: true,
               placement: { in: ["HERO", "HERO_SIDE"] },
             },
@@ -165,13 +168,13 @@ export async function getHomeLayout(): Promise<ResolvedSection[]> {
           break;
         }
         case "PRODUCTS": {
-          const products = await productsFor(s);
+          const products = await productsFor(s, storeId);
           if (products.length === 0) break; // no dejar filas vacías
           // El banner destacado solo se busca si el admin eligió dónde ponerlo;
           // sin posición la fila se muestra sin banner aunque tenga uno asignado.
           const featured = s.bannerPosition
             ? await prisma.banner.findFirst({
-                where: { active: true, sectionId: s.id },
+                where: { storeId, active: true, sectionId: s.id },
                 orderBy: { sortOrder: "asc" },
               })
             : null;
@@ -191,7 +194,7 @@ export async function getHomeLayout(): Promise<ResolvedSection[]> {
         }
         case "BANNERS": {
           const rows = await prisma.banner.findMany({
-            where: { active: true, sectionId: s.id },
+            where: { storeId, active: true, sectionId: s.id },
             orderBy: { sortOrder: "asc" },
           });
           if (rows.length === 0) break;

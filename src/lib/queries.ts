@@ -54,20 +54,24 @@ function sortProducts(list: Product[], sort: SortKey = "relevance"): Product[] {
 
 export async function getCategories(): Promise<Category[]> {
   await connection();
-  const rows = await prisma.category.findMany({ orderBy: { name: "asc" } });
+  const { id: storeId } = await getStoreContext();
+  const rows = await prisma.category.findMany({ where: { storeId }, orderBy: { name: "asc" } });
   return rows as Category[];
 }
 
 export async function getCategory(slug: string): Promise<Category | null> {
   await connection();
-  const row = await prisma.category.findUnique({ where: { storeId_slug: { storeId: (await getStoreContext()).id, slug } } });
+  const { id: storeId } = await getStoreContext();
+  const row = await prisma.category.findUnique({ where: { storeId_slug: { storeId, slug } } });
   return (row as Category) ?? null;
 }
 
 export async function getProducts(query: ProductQuery = {}): Promise<Product[]> {
   await connection();
+  const { id: storeId } = await getStoreContext();
   const rows = await prisma.product.findMany({
     where: {
+      storeId,
       status: "PUBLISHED",
       categorySlug: query.category,
       ratingAvg: query.minRating ? { gte: query.minRating } : undefined,
@@ -82,16 +86,17 @@ export async function getProducts(query: ProductQuery = {}): Promise<Product[]> 
           ]
         : undefined,
     },
-    include: PRODUCT_IMAGE_INCLUDE,
+    include: { images: { ...PRODUCT_IMAGE_INCLUDE.images, where: { storeId } } },
   });
   return sortProducts(rows.map(toProduct), query.sort);
 }
 
 export async function getProduct(slug: string): Promise<Product | null> {
   await connection();
+  const { id: storeId } = await getStoreContext();
   const row = await prisma.product.findUnique({
-    where: { storeId_slug: { storeId: (await getStoreContext()).id, slug } },
-    include: PRODUCT_IMAGE_INCLUDE,
+    where: { storeId_slug: { storeId, slug }, status: "PUBLISHED" },
+    include: { images: { ...PRODUCT_IMAGE_INCLUDE.images, where: { storeId } } },
   });
   return row ? toProduct(row) : null;
 }
@@ -101,22 +106,30 @@ export async function getRelatedProducts(
   limit = 5,
 ): Promise<Product[]> {
   await connection();
+  const { id: storeId } = await getStoreContext();
+  const anchor = await prisma.product.findFirst({
+    where: { storeId, id: product.id, slug: product.slug, status: "PUBLISHED" },
+    select: { categorySlug: true },
+  });
+  if (!anchor) return [];
   const rows = await prisma.product.findMany({
     where: {
+      storeId,
       status: "PUBLISHED",
-      categorySlug: product.category,
-      slug: { not: product.slug },
+      categorySlug: anchor.categorySlug,
+      id: { not: product.id },
     },
     take: limit,
-    include: PRODUCT_IMAGE_INCLUDE,
+    include: { images: { ...PRODUCT_IMAGE_INCLUDE.images, where: { storeId } } },
   });
   return rows.map(toProduct);
 }
 
 export async function getBrands(category?: string): Promise<string[]> {
   await connection();
+  const { id: storeId } = await getStoreContext();
   const rows = await prisma.product.findMany({
-    where: { status: "PUBLISHED", categorySlug: category },
+    where: { storeId, status: "PUBLISHED", categorySlug: category },
     select: { brand: true },
     distinct: ["brand"],
     orderBy: { brand: "asc" },
