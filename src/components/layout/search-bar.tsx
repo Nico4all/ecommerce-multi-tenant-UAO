@@ -86,7 +86,7 @@ export function SearchBar({ className }: { className?: string }) {
       <form
         role="search"
         onSubmit={onSubmit}
-        className="flex h-11 w-full items-center overflow-hidden rounded-full border border-border bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring"
+        className="flex h-11 w-full items-center overflow-hidden rounded-full border border-border bg-background shadow-sm transition-shadow focus-within:border-brand focus-within:ring-2 focus-within:ring-ring/60"
       >
         <label htmlFor="site-search" className="sr-only">
           Buscar productos
@@ -106,10 +106,13 @@ export function SearchBar({ className }: { className?: string }) {
           placeholder="Buscar productos, marcas y categorías…"
           className="h-full flex-1 bg-transparent px-4 text-sm outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:appearance-none"
         />
+        {/* Única superficie de la cabecera en rojo dominante. Puede serlo
+            porque sólo lleva icono: a 1.4.11 le basta 3:1 y el blanco sobre
+            #FF051E da 3.97:1. Con texto pequeño encima no sería admisible. */}
         <button
           type="submit"
           aria-label="Buscar"
-          className="grid h-full w-12 shrink-0 place-items-center bg-primary text-primary-foreground transition-colors hover:bg-primary/90"
+          className="grid h-full w-12 shrink-0 place-items-center bg-brand text-brand-foreground transition-colors hover:bg-brand/90"
         >
           <Search className="size-5" />
         </button>

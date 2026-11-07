@@ -25,15 +25,21 @@ import {
 import { CategoryVisual } from "@/components/category-visual";
 import { LogoImage } from "@/components/layout/logo";
 import { api } from "@/lib/api-client";
+import {
+  DEFAULT_STORE_BRAND,
+  type StoreBrand,
+} from "@/components/layout/store-brand";
 import type { HeaderUser } from "@/components/layout/user-menu";
 import type { Category } from "@/types";
 
 export function MobileNav({
   user,
   categories,
+  brand = DEFAULT_STORE_BRAND,
 }: {
   user?: HeaderUser | null;
   categories: Category[];
+  brand?: StoreBrand;
 }) {
   const router = useRouter();
 
@@ -60,12 +66,15 @@ export function MobileNav({
         <Menu className="size-5" />
       </SheetTrigger>
       <SheetContent side="left" className="w-80 overflow-hidden p-0">
+        {/* Misma franja roja que remata la cabecera, para que el panel se lea
+            como parte de ella y no como una superficie aparte. */}
+        <div aria-hidden className="h-1 shrink-0 bg-brand" />
         <SheetHeader className="shrink-0 border-b border-border">
           {/* El logo real. Va como imagen y no como <Logo/>: el título del
               panel no debe ser un enlace, y ya hay uno al inicio en la cabecera. */}
           <SheetTitle>
-            <LogoImage className="h-8" />
-            <span className="sr-only">Variedades Los Primos</span>
+            <LogoImage brand={brand.logo} className="h-8" />
+            <span className="sr-only">{brand.name}</span>
           </SheetTitle>
         </SheetHeader>
 

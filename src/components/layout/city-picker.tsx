@@ -34,10 +34,12 @@ export function CityPicker() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger className="flex items-center gap-1.5 rounded px-1 py-0.5 hover:text-foreground">
-        <MapPin className="size-3.5 text-primary" />
+      {/* El disparador hereda el color de la barra que lo contiene en vez de
+          fijar uno propio: así sigue legible si esa barra cambia de fondo. */}
+      <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-sm px-1 py-0.5 underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-current">
+        <MapPin className="size-3.5 opacity-80" />
         <span>
-          Enviar a <span className="font-medium text-foreground">{shown}</span>
+          Enviar a <span className="font-semibold">{shown}</span>
         </span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-64">
