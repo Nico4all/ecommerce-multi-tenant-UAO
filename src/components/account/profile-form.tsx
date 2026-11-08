@@ -76,8 +76,22 @@ export function ProfileForm({ profile }: { profile: ProfileData }) {
           <Input id="pf-name" autoComplete="name" {...register("name")} />
         </Field>
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Correo electrónico" htmlFor="pf-email">
-            <Input id="pf-email" value={profile.email} disabled readOnly />
+          {/* El correo identifica la cuenta y no se cambia desde aquí. Va
+              `readOnly` y no `disabled`: un campo deshabilitado se salta con
+              el tabulador y el lector de pantalla no llega a leer el correo,
+              que es justo el dato que se viene a consultar. */}
+          <Field
+            label="Correo electrónico"
+            htmlFor="pf-email"
+            hint="No se puede cambiar"
+          >
+            <Input
+              id="pf-email"
+              value={profile.email}
+              readOnly
+              aria-readonly
+              className="bg-muted"
+            />
           </Field>
           <Field label="Teléfono" htmlFor="pf-phone" optional error={errors.phone}>
             <Input
