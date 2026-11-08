@@ -52,7 +52,19 @@ export default async function SearchPage({
           (SORT_TITLE[initialSort] ?? "Todos los productos")
         )}
       </h1>
-      <CatalogView products={products} brands={brands} initialSort={initialSort} />
+      <CatalogView
+        products={products}
+        brands={brands}
+        initialSort={initialSort}
+        emptyTitle={
+          q ? `Sin resultados para "${q}"` : "Todavía no hay productos"
+        }
+        emptyHint={
+          q
+            ? "Revisa la ortografía, prueba con menos palabras o busca por categoría."
+            : "Explora las categorías para ver lo que hay disponible."
+        }
+      />
     </div>
   );
 }
