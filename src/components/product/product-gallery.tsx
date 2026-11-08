@@ -40,7 +40,7 @@ export function ProductGallery({
                 aria-label={`Ver foto ${i + 1} de ${images.length}`}
                 aria-pressed={index === i}
                 className={cn(
-                  "size-16 shrink-0 overflow-hidden rounded-md border-2 bg-white transition-colors dark:bg-slate-100",
+                  "size-16 shrink-0 overflow-hidden rounded-md border-2 bg-white outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
                   index === i
                     ? "border-primary"
                     : "border-border hover:border-primary/50",
@@ -80,7 +80,7 @@ export function ProductGallery({
             aria-label={`Ver ${view}`}
             aria-pressed={active === i}
             className={cn(
-              "size-16 overflow-hidden rounded-md border-2 transition-colors",
+              "size-16 shrink-0 overflow-hidden rounded-md border-2 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
               active === i ? "border-primary" : "border-border hover:border-primary/50",
             )}
           >

@@ -1,4 +1,4 @@
-import { PackageOpen } from "lucide-react";
+import { PackageOpen, type LucideIcon } from "lucide-react";
 import { ProductCard } from "@/components/product/product-card";
 import type { Product } from "@/types";
 
@@ -14,14 +14,17 @@ export function EmptyState({
   title,
   hint,
   action,
+  icon: Icon = PackageOpen,
 }: {
   title: string;
   hint?: string;
   action?: React.ReactNode;
+  /** El carrito y favoritos pasan el suyo; el resto usa la caja abierta. */
+  icon?: LucideIcon;
 }) {
   return (
     <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/50 px-6 py-16 text-center">
-      <PackageOpen
+      <Icon
         className="size-10 text-muted-foreground/60"
         strokeWidth={1.25}
         aria-hidden

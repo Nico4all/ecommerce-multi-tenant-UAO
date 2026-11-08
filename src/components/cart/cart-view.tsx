@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ProductImage } from "@/components/product/product-image";
+import { EmptyState } from "@/components/catalog/product-grid";
 import { formatPrice } from "@/lib/format";
 import { api, ApiClientError } from "@/lib/api-client";
 import { FREE_SHIPPING_THRESHOLD, shippingFor } from "@/lib/shipping";
@@ -98,18 +99,16 @@ export function CartView({ cart: initial }: { cart: CartSummary }) {
 
   if (cart.lines.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-20 text-center">
-        <ShoppingBag className="size-12 text-muted-foreground/50" strokeWidth={1.25} />
-        <h2 className="mt-4 font-heading text-xl font-semibold">
-          Tu carrito está vacío
-        </h2>
-        <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-          Explora las categorías y encuentra tus próximas ofertas.
-        </p>
-        <Link href="/" className={cn(buttonVariants(), "mt-5")}>
-          Empezar a comprar
-        </Link>
-      </div>
+      <EmptyState
+        icon={ShoppingBag}
+        title="Tu carrito está vacío"
+        hint="Explora las categorías y encuentra tus próximas ofertas."
+        action={
+          <Link href="/" className={cn(buttonVariants())}>
+            Empezar a comprar
+          </Link>
+        }
+      />
     );
   }
 
@@ -132,7 +131,7 @@ export function CartView({ cart: initial }: { cart: CartSummary }) {
                     src={l.product.imageUrl}
                     category={l.product.category}
                     name={l.product.name}
-                    className="size-24 rounded-lg border border-border"
+                    className="size-20 rounded-lg border border-border sm:size-24"
                   />
                 </Link>
 
@@ -164,24 +163,34 @@ export function CartView({ cart: initial }: { cart: CartSummary }) {
                     </span>
                   )}
 
-                  <div className="mt-auto flex items-center justify-between pt-2">
-                    <div className="flex items-center rounded-md border border-border">
+                  <div className="mt-auto flex flex-wrap items-center justify-between gap-x-3 gap-y-2 pt-2">
+                    {/* El nombre del grupo nombra el producto: con varias
+                        lineas, "Disminuir" a secas no decia de cual. */}
+                    <div
+                      role="group"
+                      aria-label={`Cantidad de ${l.product.name}`}
+                      className="flex items-center rounded-md border border-border"
+                    >
                       <button
                         onClick={() => setQty(l.id, l.qty - 1)}
                         disabled={l.qty <= 1 || busyItem !== null}
-                        aria-label="Disminuir"
-                        className="grid size-8 place-items-center text-muted-foreground hover:text-foreground disabled:opacity-40"
+                        aria-label={`Disminuir cantidad de ${l.product.name}`}
+                        className="grid size-8 place-items-center rounded-l-md text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
                       >
                         <Minus className="size-3.5" />
                       </button>
-                      <span className="w-9 text-center text-sm font-semibold tabular-nums">
+                      <span
+                        aria-live="polite"
+                        aria-atomic="true"
+                        className="w-9 text-center text-sm font-semibold tabular-nums"
+                      >
                         {l.qty}
                       </span>
                       <button
                         onClick={() => setQty(l.id, l.qty + 1)}
                         disabled={busyItem !== null}
-                        aria-label="Aumentar"
-                        className="grid size-8 place-items-center text-muted-foreground hover:text-foreground disabled:opacity-40"
+                        aria-label={`Aumentar cantidad de ${l.product.name}`}
+                        className="grid size-8 place-items-center rounded-r-md text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
                       >
                         <Plus className="size-3.5" />
                       </button>
@@ -195,7 +204,7 @@ export function CartView({ cart: initial }: { cart: CartSummary }) {
                         onClick={() => remove(l.id)}
                         disabled={busyItem !== null}
                         aria-label={`Eliminar ${l.product.name}`}
-                        className="text-muted-foreground transition-colors hover:text-destructive disabled:opacity-40"
+                        className="rounded-sm text-muted-foreground outline-none transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
                       >
                         <Trash2 className="size-4" />
                       </button>
@@ -209,7 +218,7 @@ export function CartView({ cart: initial }: { cart: CartSummary }) {
 
         <Link
           href="/"
-          className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+          className="mt-4 inline-flex items-center gap-1 rounded-sm text-sm font-medium text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
         >
           ← Seguir comprando
         </Link>
@@ -230,14 +239,14 @@ export function CartView({ cart: initial }: { cart: CartSummary }) {
               <button
                 onClick={removeCoupon}
                 aria-label="Quitar código"
-                className="text-muted-foreground hover:text-destructive"
+                className="rounded-sm text-muted-foreground outline-none hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <X className="size-4" />
               </button>
             </div>
           ) : (
             <div className="flex gap-2">
-              <div className="flex h-10 flex-1 items-center rounded-md border border-border px-2">
+              <div className="flex h-10 min-w-0 flex-1 items-center rounded-md border border-border px-2">
                 <Tag className="size-4 text-muted-foreground" />
                 <input
                   value={couponCode}
@@ -271,22 +280,22 @@ export function CartView({ cart: initial }: { cart: CartSummary }) {
           <Separator />
 
           <dl className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">
+            <div className="flex justify-between gap-3">
+              <dt className="min-w-0 text-muted-foreground">
                 Subtotal ({cart.itemCount}{" "}
                 {cart.itemCount === 1 ? "artículo" : "artículos"})
               </dt>
-              <dd className="tabular-nums">{formatPrice(cart.subtotal)}</dd>
+              <dd className="shrink-0 tabular-nums">{formatPrice(cart.subtotal)}</dd>
             </div>
             {discountAmount > 0 && (
-              <div className="flex justify-between text-primary">
-                <dt>Descuento ({discount?.code})</dt>
-                <dd className="tabular-nums">-{formatPrice(discountAmount)}</dd>
+              <div className="flex justify-between gap-3 text-primary">
+                <dt className="min-w-0 truncate">Descuento ({discount?.code})</dt>
+                <dd className="shrink-0 tabular-nums">-{formatPrice(discountAmount)}</dd>
               </div>
             )}
-            <div className="flex justify-between">
+            <div className="flex justify-between gap-3">
               <dt className="text-muted-foreground">Envío</dt>
-              <dd className="tabular-nums">
+              <dd className="shrink-0 tabular-nums">
                 {shipping === 0 ? (
                   <span className="font-medium text-success">Gratis</span>
                 ) : (
@@ -298,7 +307,7 @@ export function CartView({ cart: initial }: { cart: CartSummary }) {
 
           <Separator />
 
-          <div className="flex items-baseline justify-between">
+          <div className="flex items-baseline justify-between gap-3">
             <span className="font-semibold">Total</span>
             <span className="font-heading text-xl font-bold tabular-nums">
               {formatPrice(total)}

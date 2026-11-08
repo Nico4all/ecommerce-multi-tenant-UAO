@@ -200,10 +200,10 @@ export default async function ProductPage({
             </p>
           </div>
 
-          <ul className="mt-4 space-y-1.5 text-sm text-muted-foreground">
-            <li>• {product.brand} original.</li>
-            <li>• Envío con seguimiento del pedido.</li>
-            <li>• Devolución gratuita dentro de los primeros 30 días.</li>
+          <ul className="mt-4 list-disc space-y-1.5 pl-5 text-sm text-muted-foreground marker:text-brand">
+            <li>{product.brand} original.</li>
+            <li>Envío con seguimiento del pedido.</li>
+            <li>Devolución gratuita dentro de los primeros 30 días.</li>
           </ul>
 
           <Separator className="my-6" />
@@ -234,23 +234,23 @@ export default async function ProductPage({
         <Tabs defaultValue="descripcion">
           <TabsList
             variant="line"
-            className="h-auto w-full justify-start gap-6 rounded-none border-b border-border p-0"
+            className="no-scrollbar h-auto w-full justify-start gap-5 overflow-x-auto rounded-none border-b border-border p-0 sm:gap-6"
           >
             <TabsTrigger
               value="descripcion"
-              className="flex-none px-0 pb-3 text-base data-active:text-primary"
+              className="shrink-0 flex-none px-0 pb-3 text-base data-active:text-primary"
             >
               Descripción
             </TabsTrigger>
             <TabsTrigger
               value="especificaciones"
-              className="flex-none px-0 pb-3 text-base data-active:text-primary"
+              className="shrink-0 flex-none px-0 pb-3 text-base data-active:text-primary"
             >
               Especificaciones
             </TabsTrigger>
             <TabsTrigger
               value="resenas"
-              className="flex-none px-0 pb-3 text-base data-active:text-primary"
+              className="shrink-0 flex-none px-0 pb-3 text-base data-active:text-primary"
             >
               Reseñas ({formatCount(product.reviews)})
             </TabsTrigger>
@@ -261,15 +261,14 @@ export default async function ProductPage({
               <p>{detail.description}</p>
             ) : (
               <p>
-                {product.name} de {product.brand} combina calidad y diseño para
-                ofrecerte una experiencia superior. Fabricado con materiales de
-                primera y pensado para el día a día, es una de las opciones más
-                valoradas en la categoría de {cat.name.toLowerCase()}.
+                Todavía no hay una descripción ampliada de este producto. En
+                Especificaciones están los datos confirmados y en Reseñas, lo
+                que cuentan quienes ya lo compraron.
               </p>
             )}
             <p className="mt-3">
-              Compra con confianza en Variedades Los Primos: seguimiento de tu
-              pedido y soporte cuando lo necesites.
+              Compra con confianza en {SITE_NAME}: seguimiento de tu pedido y
+              soporte cuando lo necesites.
             </p>
           </TabsContent>
 
@@ -288,7 +287,6 @@ export default async function ProductPage({
                   : ([
                       ["Marca", product.brand],
                       ["Categoría", cat.name],
-                      ["SKU", product.id.toUpperCase() + "-" + product.slug.slice(0, 4).toUpperCase()],
                       ["Envío", shippingLabel],
                       ["Calificación", `${product.rating} / 5`],
                     ] as [string, string][])

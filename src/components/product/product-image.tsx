@@ -34,7 +34,7 @@ export function ProductImage({
   }
 
   return (
-    <div className={cn("overflow-hidden bg-white dark:bg-slate-100", className)}>
+    <div className={cn("overflow-hidden bg-white", className)}>
       {/* eslint-disable-next-line @next/next/no-img-element -- ruta subida o URL externa del admin */}
       <img
         src={src}
