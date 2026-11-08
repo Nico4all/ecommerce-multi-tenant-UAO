@@ -7,7 +7,6 @@ import {
   CreditCard,
   Banknote,
   ShieldCheck,
-  Lock,
   ChevronLeft,
   Loader2,
   AlertCircle,
@@ -26,7 +25,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Thumb } from "@/components/product/thumb";
+import { ProductImage } from "@/components/product/product-image";
 import { CityAutocomplete } from "@/components/checkout/city-autocomplete";
 import { formatPrice } from "@/lib/format";
 import { api, ApiClientError } from "@/lib/api-client";
@@ -63,18 +62,39 @@ const methods: {
   label: string;
   description: string;
   icon: typeof CreditCard;
+  /** Lo que hace el botón de confirmar con este método. */
+  cta: string;
+  /** Qué pasa al confirmar, dicho antes de confirmar. */
+  note: React.ReactNode;
 }[] = [
   {
     id: "WOMPI",
     label: "Pago en línea",
     description: "Tarjeta, PSE, Nequi y más · pasarela segura Wompi",
     icon: CreditCard,
+    cta: "Continuar al pago",
+    note: (
+      <>
+        Al continuar te llevaremos a la pasarela segura de <strong>Wompi</strong>{" "}
+        (de Bancolombia) para pagar con tarjeta, PSE, Nequi, Bancolombia o
+        efectivo en corresponsales. Tus datos de pago nunca pasan por nuestra
+        tienda, y el pedido queda confirmado cuando Wompi aprueba el pago.
+      </>
+    ),
   },
   {
     id: "COD",
     label: "Contra entrega",
     description: "Pagas en efectivo cuando recibas tu pedido",
     icon: Banknote,
+    cta: "Confirmar pedido",
+    note: (
+      <>
+        Pagas en <strong>efectivo al recibir</strong> tu pedido. Ten el monto
+        exacto a la mano: el mensajero no siempre tiene cambio. El pedido queda
+        confirmado de inmediato, sin pasar por la pasarela.
+      </>
+    ),
   },
 ];
 
@@ -101,8 +121,20 @@ export function CheckoutForm({
   const [discount, setDiscount] = React.useState<AppliedDiscount | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
+  // Al fallar el envío no basta con subir la página: quien navega con teclado
+  // o lector de pantalla se queda donde estaba. Se le lleva el foco al aviso.
+  const errorRef = React.useRef<HTMLParagraphElement>(null);
+
+  const chosen = methods.find((m) => m.id === method) ?? methods[0];
 
   const set = (patch: Partial<typeof form>) => setForm((f) => ({ ...f, ...patch }));
+
+  const fail = (message: string) => {
+    setError(message);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    // Tras el repintado, para que el nodo del aviso ya exista.
+    requestAnimationFrame(() => errorRef.current?.focus());
+  };
 
   // Departamentos/provincias y ciudades según el país elegido. Si aún no se ha
   // elegido departamento, se sugieren TODAS las ciudades del país (para poder
@@ -161,8 +193,7 @@ export function CheckoutForm({
     e.preventDefault();
     // El departamento es un desplegable (no valida nativo como los inputs).
     if (!form.state) {
-      setError(`Selecciona tu ${stateLabel.toLowerCase()}`);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      fail(`Selecciona tu ${stateLabel.toLowerCase()}`);
       return;
     }
     setError(null);
@@ -192,23 +223,26 @@ export function CheckoutForm({
       router.push(`/checkout/success/${result.code}`);
       router.refresh();
     } catch (err) {
-      setError(
+      fail(
         err instanceof ApiClientError
           ? err.message
           : "No se pudo procesar el pedido",
       );
       setSubmitting(false);
-      window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
 
   return (
-    <form onSubmit={onSubmit} className="grid gap-6 lg:grid-cols-3">
+    <form
+      onSubmit={onSubmit}
+      aria-busy={submitting}
+      className="grid gap-6 lg:grid-cols-3"
+    >
       {/* Formulario */}
       <div className="space-y-4 lg:col-span-2">
         <Link
           href="/cart"
-          className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+          className="inline-flex items-center gap-1 rounded-sm text-sm font-medium text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ChevronLeft className="size-4" />
           Volver al carrito
@@ -216,18 +250,31 @@ export function CheckoutForm({
 
         {error && (
           <p
+            ref={errorRef}
+            tabIndex={-1}
             role="alert"
-            className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive"
+            className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive outline-none"
           >
-            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+            <AlertCircle aria-hidden className="mt-0.5 size-4 shrink-0" />
             {error}
           </p>
         )}
 
         {/* Contacto */}
-        <section className="rounded-xl border border-border bg-card p-5">
-          <h2 className="mb-4 flex items-center gap-2 font-heading font-semibold">
-            <span className="grid size-6 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</span>
+        <section
+          aria-labelledby="paso-contacto"
+          className="rounded-xl border border-border bg-card p-5"
+        >
+          <h2
+            id="paso-contacto"
+            className="mb-4 flex items-center gap-2 font-heading font-semibold"
+          >
+            <span
+              aria-hidden
+              className="grid size-6 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
+            >
+              1
+            </span>
             Datos de contacto
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -264,8 +311,9 @@ export function CheckoutForm({
                 value={form.email}
                 onChange={(e) => set({ email: e.target.value })}
                 placeholder="tu@correo.com"
+                aria-describedby="email-hint"
               />
-              <p className="text-xs text-muted-foreground">
+              <p id="email-hint" className="text-xs text-muted-foreground">
                 Aquí te enviaremos la confirmación y el rastreo del pedido.
               </p>
             </div>
@@ -273,9 +321,20 @@ export function CheckoutForm({
         </section>
 
         {/* Dirección de envío */}
-        <section className="rounded-xl border border-border bg-card p-5">
-          <h2 className="mb-4 flex items-center gap-2 font-heading font-semibold">
-            <span className="grid size-6 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</span>
+        <section
+          aria-labelledby="paso-envio"
+          className="rounded-xl border border-border bg-card p-5"
+        >
+          <h2
+            id="paso-envio"
+            className="mb-4 flex items-center gap-2 font-heading font-semibold"
+          >
+            <span
+              aria-hidden
+              className="grid size-6 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
+            >
+              2
+            </span>
             Dirección de envío
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -363,58 +422,72 @@ export function CheckoutForm({
         </section>
 
         {/* Método de pago */}
-        <section className="rounded-xl border border-border bg-card p-5">
-          <h2 className="mb-4 flex items-center gap-2 font-heading font-semibold">
-            <span className="grid size-6 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground">3</span>
+        <section
+          aria-labelledby="paso-pago"
+          className="rounded-xl border border-border bg-card p-5"
+        >
+          <h2
+            id="paso-pago"
+            className="mb-4 flex items-center gap-2 font-heading font-semibold"
+          >
+            <span
+              aria-hidden
+              className="grid size-6 place-items-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
+            >
+              3
+            </span>
             Método de pago
           </h2>
 
-          <div className="grid gap-2 sm:grid-cols-2">
+          {/* Radios nativos: se recorren con las flechas, el lector anuncia
+              "1 de 2" y el estado elegido no depende solo del color. Antes eran
+              botones con aria-pressed, que se leen como dos conmutadores
+              independientes y no dicen que elegir uno descarta el otro. */}
+          <fieldset aria-labelledby="paso-pago" className="grid gap-2 sm:grid-cols-2">
             {methods.map((m) => (
-              <button
-                key={m.id}
-                type="button"
-                onClick={() => setMethod(m.id)}
-                aria-pressed={method === m.id}
-                className={cn(
-                  "flex items-start gap-3 rounded-lg border p-3 text-left text-sm transition-colors",
-                  method === m.id
-                    ? "border-primary bg-primary/5 ring-1 ring-primary"
-                    : "border-border hover:bg-accent",
-                )}
-              >
-                <m.icon
-                  className={cn(
-                    "mt-0.5 size-5 shrink-0",
-                    method === m.id ? "text-primary" : "text-muted-foreground",
-                  )}
+              <label key={m.id} className="block cursor-pointer">
+                <input
+                  type="radio"
+                  name="metodo-pago"
+                  value={m.id}
+                  checked={method === m.id}
+                  onChange={() => setMethod(m.id)}
+                  className="peer sr-only"
                 />
-                <span>
-                  <span className="block font-medium">{m.label}</span>
-                  <span className="block text-xs text-muted-foreground">
-                    {m.description}
+                <span
+                  className={cn(
+                    "flex h-full items-start gap-3 rounded-lg border-2 p-3 text-left text-sm transition-colors",
+                    "peer-focus-visible:ring-2 peer-focus-visible:ring-ring",
+                    method === m.id
+                      ? "border-primary bg-primary/5"
+                      : "border-border hover:bg-accent",
+                  )}
+                >
+                  <m.icon
+                    aria-hidden
+                    className={cn(
+                      "mt-0.5 size-5 shrink-0",
+                      method === m.id ? "text-primary" : "text-muted-foreground",
+                    )}
+                  />
+                  <span>
+                    <span className="block font-medium">{m.label}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {m.description}
+                    </span>
                   </span>
                 </span>
-              </button>
+              </label>
             ))}
-          </div>
+          </fieldset>
 
-          <div className="mt-4">
-            {method === "WOMPI" && (
-              <p className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
-                Al confirmar te llevaremos a la pasarela segura de{" "}
-                <strong>Wompi</strong> (de Bancolombia) para pagar con tarjeta,
-                PSE, Nequi, Bancolombia o efectivo en corresponsales. Tus datos
-                de pago nunca pasan por nuestra tienda.
-              </p>
-            )}
-            {method === "COD" && (
-              <p className="rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
-                Pagas en <strong>efectivo al recibir</strong> tu pedido. Ten el
-                monto exacto a la mano: el mensajero no siempre tiene cambio.
-              </p>
-            )}
-          </div>
+          {/* Cambia con la elección, así que se anuncia al cambiar. */}
+          <p
+            aria-live="polite"
+            className="mt-4 rounded-lg bg-muted/50 p-3 text-sm leading-relaxed text-muted-foreground"
+          >
+            {chosen.note}
+          </p>
         </section>
       </div>
 
@@ -426,13 +499,18 @@ export function CheckoutForm({
           <ul className="space-y-3">
             {cart.lines.map((l) => (
               <li key={l.id} className="flex items-center gap-3">
-                <div className="relative">
-                  <Thumb
+                <div className="relative shrink-0">
+                  {/* La foto real del producto. Antes era <Thumb>, que siempre
+                      dibuja el mosaico de la categoría: la última pantalla
+                      antes de pagar no mostraba lo que el cliente eligió. */}
+                  <ProductImage
+                    src={l.product.imageUrl}
                     category={l.product.category}
-                    seed={l.product.name}
+                    name={l.product.name}
                     className="size-12 rounded-md border border-border"
                   />
                   <span className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground tabular-nums">
+                    <span className="sr-only">Cantidad: </span>
                     {l.qty}
                   </span>
                 </div>
@@ -443,7 +521,7 @@ export function CheckoutForm({
                     {l.variantName ? ` · ${l.variantName}` : ""}
                   </p>
                 </div>
-                <span className="text-sm font-medium tabular-nums">
+                <span className="shrink-0 text-sm font-medium tabular-nums">
                   {formatPrice(l.product.price * l.qty)}
                 </span>
               </li>
@@ -453,7 +531,7 @@ export function CheckoutForm({
           {discount && (
             <div className="flex items-center justify-between rounded-md border border-primary/40 bg-primary/5 px-3 py-2">
               <span className="flex items-center gap-2 text-sm font-medium text-primary">
-                <Tag className="size-4" />
+                <Tag aria-hidden className="size-4" />
                 {discount.code}
               </span>
               <button
@@ -463,37 +541,37 @@ export function CheckoutForm({
                   localStorage.removeItem(DISCOUNT_STORAGE_KEY);
                 }}
                 aria-label="Quitar código"
-                className="text-muted-foreground hover:text-destructive"
+                className="grid size-8 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <X className="size-4" />
               </button>
             </div>
           )}
 
-          <div className="space-y-2 border-t border-border pt-4 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span className="tabular-nums">{formatPrice(cart.subtotal)}</span>
+          <dl className="space-y-2 border-t border-border pt-4 text-sm">
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Subtotal</dt>
+              <dd className="shrink-0 tabular-nums">{formatPrice(cart.subtotal)}</dd>
             </div>
             {discountAmount > 0 && (
-              <div className="flex justify-between text-primary">
-                <span>Descuento</span>
-                <span className="tabular-nums">-{formatPrice(discountAmount)}</span>
+              <div className="flex justify-between gap-3 text-primary">
+                <dt className="min-w-0 truncate">Descuento</dt>
+                <dd className="shrink-0 tabular-nums">-{formatPrice(discountAmount)}</dd>
               </div>
             )}
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Envío</span>
-              <span className="tabular-nums">
+            <div className="flex justify-between gap-3">
+              <dt className="text-muted-foreground">Envío</dt>
+              <dd className="shrink-0 tabular-nums">
                 {shipping === 0 ? (
-                  <span className="font-medium text-success">Gratis</span>
+                  <span className="font-semibold text-success-ink">Gratis</span>
                 ) : (
                   formatPrice(shipping)
                 )}
-              </span>
+              </dd>
             </div>
-          </div>
+          </dl>
 
-          <div className="flex items-baseline justify-between border-t border-border pt-3">
+          <div className="flex items-baseline justify-between gap-3 border-t border-border pt-3">
             <span className="font-semibold">Total</span>
             <span className="font-heading text-xl font-bold tabular-nums">
               {formatPrice(total)}
@@ -508,28 +586,36 @@ export function CheckoutForm({
           >
             {submitting ? (
               <>
-                <Loader2 className="size-4 animate-spin" /> Procesando…
+                <Loader2 aria-hidden className="size-4 animate-spin" /> Procesando…
               </>
             ) : (
               <>
-                <Lock className="size-4" /> Confirmar pedido
+                <chosen.icon aria-hidden className="size-4" /> {chosen.cta}
               </>
             )}
           </Button>
           <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-            <ShieldCheck className="size-3.5 text-success" />
+            <ShieldCheck aria-hidden className="size-3.5 text-success-ink" />
             Tus datos viajan cifrados y protegidos
           </p>
           {/* Informativo, no un checkbox nuevo: aceptar los Términos ya se pidió
               al crear la cuenta; el retracto es un derecho legal automático, no
               algo que el cliente deba "autorizar" pedido a pedido. */}
-          <p className="text-center text-xs text-muted-foreground">
+          <p className="text-center text-xs leading-relaxed text-muted-foreground">
             Al confirmar aceptas nuestros{" "}
-            <Link href="/terminos" target="_blank" className="text-primary hover:underline">
+            <Link
+              href="/terminos"
+              target="_blank"
+              className="rounded-sm text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            >
               Términos
             </Link>{" "}
             y tienes derecho a{" "}
-            <Link href="/retracto" target="_blank" className="text-primary hover:underline">
+            <Link
+              href="/retracto"
+              target="_blank"
+              className="rounded-sm text-primary underline-offset-2 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            >
               retracto y garantía
             </Link>
             .

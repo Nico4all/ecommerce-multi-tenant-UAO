@@ -34,15 +34,19 @@ const labels: Record<string, string> = {
 };
 
 export function StatusBadge({ status }: { status: string }) {
+  // Solo la primera letra en alta. Antes era `capitalize`, que ponía en alta
+  // cada palabra y dejaba "En Camino"; y `first-letter:uppercase` tampoco
+  // sirve aquí, porque ::first-letter no aplica a un contenedor flex.
+  const text = labels[status] ?? status;
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium capitalize",
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
         styles[status] ?? "bg-muted text-muted-foreground",
       )}
     >
-      <span className="size-1.5 rounded-full bg-current opacity-70" />
-      {labels[status] ?? status}
+      <span aria-hidden className="size-1.5 rounded-full bg-current opacity-70" />
+      {text.charAt(0).toUpperCase() + text.slice(1)}
     </span>
   );
 }

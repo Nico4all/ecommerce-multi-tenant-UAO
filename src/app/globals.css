@@ -25,6 +25,7 @@
   --color-deal-ink: var(--deal-ink);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-success-ink: var(--success-ink);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -101,6 +102,12 @@
      manual: es una derivacion, igual que los neutros de abajo. */
   --uao-accent-orange-ink: #9f5e00;
 
+  /* Lo mismo para el acento verde: a su valor de manual rinde 2.19:1 sobre
+     blanco y 2.02:1 sobre crema, asi que de letra incumple 1.4.3 y de icono
+     incumple 1.4.11. Oscurecido conserva el matiz y llega a 6.05:1 sobre
+     blanco y 5.58:1 sobre crema. Derivacion, no color de manual. */
+  --uao-accent-teal-ink: #00705c;
+
   /* Neutros derivados: NO son colores de marca. Tinta cálida para texto y
      superficies de modo oscuro, obtenidas de la familia del subordinado
      #8A1428 para no introducir un matiz ajeno a la paleta. */
@@ -159,8 +166,12 @@
   --deal-foreground: var(--uao-ink);
   --deal-ink: var(--uao-accent-orange-ink);
 
+  /* Mismo reparto que --deal: el par --success/--success-foreground es para
+     RELLENOS (la tinta sobre el verde rinde 8.35:1) y --success-ink es el
+     verde cuando tiene que ser la letra o un icono sobre la pagina. */
   --success: var(--uao-accent-teal);
   --success-foreground: var(--uao-ink);
+  --success-ink: var(--uao-accent-teal-ink);
 
   /* Se usa como texto y como tinte al 10%, nunca como superficie sólida:
      #8A1428 rinde 9.5:1 sobre blanco y 8.8:1 sobre crema. */
@@ -225,6 +236,9 @@
 
   --success: var(--uao-accent-teal);
   --success-foreground: var(--uao-ink);
+  /* Sobre la noche el acento ya rinde 8.77:1 como texto y 8.27:1 sobre la
+     superficie elevada: aqui la tinta verde es el acento mismo. */
+  --success-ink: var(--uao-accent-teal);
 
   /* Acento rojo-naranja: 5.6:1 como texto sobre el fondo oscuro. */
   --destructive: var(--uao-accent-red);

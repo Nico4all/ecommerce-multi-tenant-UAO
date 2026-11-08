@@ -34,13 +34,25 @@ export function RetryPayment({ code }: { code: string }) {
   };
 
   return (
-    <Button onClick={pagar} disabled={busy} className="w-full sm:w-auto">
+    // `aria-busy` y el texto que cambia: el cliente que no ve el giro del
+    // icono igual se entera de que ya se está yendo a la pasarela.
+    <Button
+      onClick={pagar}
+      disabled={busy}
+      aria-busy={busy}
+      className="h-11 w-full gap-2 sm:w-auto"
+    >
       {busy ? (
-        <Loader2 className="size-4 animate-spin" />
+        <>
+          <Loader2 aria-hidden className="size-4 animate-spin" />
+          Abriendo la pasarela…
+        </>
       ) : (
-        <CreditCard className="size-4" />
+        <>
+          <CreditCard aria-hidden className="size-4" />
+          Pagar este pedido
+        </>
       )}
-      Pagar este pedido
     </Button>
   );
 }
