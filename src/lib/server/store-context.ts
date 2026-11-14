@@ -134,3 +134,22 @@ export async function resolveStoreContext(
     [validated]: true as const,
   });
 }
+
+/** Contexto de conciliación: ID obtenido de un pago persistido, nunca del Host. */
+export async function resolvePersistedStoreContext(
+  client: Pick<PrismaClient, "store">,
+  storeId: string,
+): Promise<StoreContext> {
+  const store = await client.store.findUnique({
+    where: { id: storeId },
+    include: { domains: { where: { verifiedAt: { not: null } }, orderBy: [{ createdAt: "asc" }, { hostname: "asc" }], take: 1 } },
+  });
+  // Se concilian cobros incluso si se desactivó el storefront después de comprar.
+  const hostname = store?.domains[0]?.hostname;
+  if (!store || !hostname) throw new StoreContextError(503, "Falta un dominio verificado para conciliar el pago");
+  const authority = normalizeAuthority(hostname);
+  return Object.freeze({
+    id: store.id, name: store.name, slug: store.slug, ...authority,
+    origin: new URL(`https://${authority.authority}`).origin, [validated]: true as const,
+  });
+}

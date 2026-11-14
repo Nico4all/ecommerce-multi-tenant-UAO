@@ -1,4 +1,5 @@
 import "server-only";
+import { NextResponse } from "next/server";
 import { resolveStoreRequest } from "@/lib/prisma";
 import { runWithStoreContext, StoreContextError } from "./store-context";
 import { uploadResponse } from "./upload-response";
@@ -6,6 +7,11 @@ import { uploadResponse } from "./upload-response";
 export const privateStoreHeaders = { "Cache-Control": "private, no-store, max-age=0", Vary: "Host, Forwarded, X-Forwarded-Host" };
 
 export async function storeIngress(request: Request) {
+  // Única entrada sin tenant de navegador: autentica firma y API del proveedor
+  // en su handler y resuelve la tienda por la referencia persistida del pago.
+  if (request.method === "POST" && new URL(request.url).pathname === "/api/webhooks/wompi") {
+    return { response: NextResponse.next({ headers: privateStoreHeaders }) };
+  }
   try {
     const context = await resolveStoreRequest(request);
     const url = new URL(request.url);

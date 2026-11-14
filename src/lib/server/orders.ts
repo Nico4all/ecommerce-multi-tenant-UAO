@@ -1,8 +1,10 @@
 import "server-only";
-import { prisma } from "@/lib/prisma";
+import { randomUUID } from "node:crypto";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import { ApiError } from "./api-helpers";
 import { getSession, requireUser } from "./auth";
-import { getCart, clearCurrentCart } from "./carts";
+import { reserveOrderStock } from "./stock";
+import { toDomainProduct } from "./mappers";
 import { validateDiscount, redeemDiscount } from "./discounts";
 import { notifyOrderCreated, notifyLowStockAfterSale } from "./notifications";
 import { alertStoreOrderCreated } from "./store-alerts";
@@ -43,173 +45,86 @@ export interface CheckoutResult {
   redirectUrl?: string;
 }
 
-/** Siguiente código de orden VLP-XXXXX (secuencial sobre el mayor existente). */
-async function nextOrderCode(): Promise<string> {
-  const last = await prisma.order.findFirst({
-    orderBy: { code: "desc" },
-    select: { code: true },
-  });
-  const lastNum = last ? Number(last.code.replace(/\D/g, "")) : 10234;
-  return `VLP-${(Number.isFinite(lastNum) ? lastNum : 10234) + 1}`;
+/** Código global sin contador compartido entre tiendas o requests concurrentes. */
+function nextOrderCode(): string {
+  return `VLP-${randomUUID().replaceAll("-", "").toUpperCase()}`;
 }
 
-/**
- * Checkout transaccional: valida el carrito y el stock, aplica descuento,
- * crea Order + OrderItems (snapshot) + Payment + eventos, descuenta stock
- * y canjea el cupón. Al final vacía el carrito.
- */
+/** Reserva, snapshots, descuento y consumo del carrito se confirman juntos. */
 export async function checkout(input: CheckoutInput): Promise<CheckoutResult> {
-  // Comprar exige cuenta: sin ella el cliente no tendría dónde ver sus pedidos.
-  // (El carrito sí funciona de invitado y se fusiona al iniciar sesión.)
   const session = await requireUser();
-  const cart = await getCart();
-  if (cart.lines.length === 0) {
-    throw new ApiError(400, "Tu carrito está vacío");
-  }
-  // Falla temprano, ANTES de crear la orden: sin llaves no hay a dónde redirigir.
+  const store = await getStoreContext();
+  const storeId = store.id;
   if (input.method === "WOMPI" && !wompiConfigured()) {
-    throw new ApiError(
-      503,
-      "Los pagos en línea no están disponibles en este momento. Elige contra entrega o intenta más tarde.",
-    );
+    throw new ApiError(503, "Los pagos en línea no están disponibles en este momento. Elige contra entrega o intenta más tarde.");
   }
-
-  // Recalcular todo del lado servidor (nunca confiar en montos del cliente).
-  const subtotal = cart.subtotal;
-  let shippingCost = shippingFor(
-    subtotal,
-    cart.lines.map((l) => ({ shippingCost: l.product.shippingCost })),
-  );
-  let discountTotal = 0;
-  let discount = null as Awaited<ReturnType<typeof validateDiscount>> | null;
-
-  if (input.discountCode) {
-    discount = await validateDiscount(input.discountCode, subtotal);
-    discountTotal = discount.amount;
-    if (discount.freeShipping) shippingCost = 0;
-  }
-
-  const total = Math.max(0, subtotal - discountTotal) + shippingCost;
-
-  // Validar stock actual antes de la transacción (por variante si aplica).
-  for (const line of cart.lines) {
-    if (line.variantId) {
-      const v = await prisma.productVariant.findUnique({
-        where: { id: line.variantId },
-        select: { stock: true, name: true },
-      });
-      if (v && v.stock > 0 && line.qty > v.stock) {
-        throw new ApiError(
-          400,
-          `Sin stock suficiente de "${line.product.name}" en ${v.name} (quedan ${v.stock})`,
-        );
-      }
-      continue;
-    }
-    const p = await prisma.product.findUnique({
-      where: { id: line.product.id },
-      select: { stock: true, name: true },
+  const { order, cart, total, redirectUrl } = await prisma.$transaction(async (tx) => {
+    const current = await tx.cart.findUnique({
+      where: { storeId_userId: { storeId, userId: session.id } }, select: { id: true },
     });
-    if (p && p.stock > 0 && line.qty > p.stock) {
-      throw new ApiError(
-        400,
-        `Sin stock suficiente de "${p.name}" (quedan ${p.stock})`,
-      );
+    if (!current) throw new ApiError(400, "Tu carrito está vacío");
+    // Bloquear el carrito antes de leerlo impide dos checkouts de la misma compra.
+    await tx.cart.update({ where: { id: current.id, storeId, userId: session.id }, data: { updatedAt: new Date() } });
+    const rows = await tx.cartItem.findMany({
+      where: { storeId, cartId: current.id },
+      include: { product: { include: { variants: { where: { storeId }, select: { id: true } } } }, variant: true },
+      orderBy: { id: "asc" },
+    });
+    if (!rows.length) throw new ApiError(400, "Tu carrito está vacío");
+    for (const row of rows) {
+      if (row.product.status !== "PUBLISHED" ||
+        (row.variantId && (!row.variant || row.variant.productId !== row.productId)) ||
+        (!row.variantId && row.product.variants.length > 0)) {
+        throw new ApiError(409, "Un producto o variante ya no está disponible");
+      }
     }
-  }
-
-  // Costo de cada producto para snapshot en el OrderItem (base de las ganancias).
-  // Se lee ahora, no del carrito, porque el costo es interno y no viaja al cliente.
-  const productIds = [...new Set(cart.lines.map((l) => l.product.id))];
-  const costRows = await prisma.product.findMany({
-    where: { id: { in: productIds } },
-    select: { id: true, cost: true },
-  });
-  const costMap = new Map(
-    costRows.map((r) => [r.id, r.cost === null ? null : Number(r.cost)]),
-  );
-
-  // Con pasarela real ya no hay pagos "instantáneos": toda orden nace PENDIENTE.
-  // WOMPI se confirma por webhook/retorno; COD se cobra al entregar.
-  const code = await nextOrderCode();
-
-  const order = await prisma.$transaction(async (tx) => {
-    const created = await tx.order.create({
+    const lines = rows.map((row) => ({
+      product: toDomainProduct(row.product), qty: row.qty, variantId: row.variantId,
+      variantName: row.variant?.name ?? null,
+    }));
+    const subtotal = lines.reduce((sum, line) => sum + Math.round(line.product.price * 100) * line.qty, 0) / 100;
+    const discount = input.discountCode ? await validateDiscount(input.discountCode, subtotal, tx) : null;
+    const discountTotal = discount?.amount ?? 0;
+    const shippingCost = discount?.freeShipping ? 0 : shippingFor(subtotal, lines.map((line) => ({ shippingCost: line.product.shippingCost })));
+    const total = Math.max(0, subtotal - discountTotal) + shippingCost;
+    const code = nextOrderCode();
+    const redirectUrl = input.method === "WOMPI" ? buildWompiCheckoutUrl({
+      reference: buildPaymentReference(code, 1), amountInCents: Math.round(total * 100),
+      customerEmail: input.contact.email, customerName: input.contact.name,
+      redirectUrl: `${store.origin}/checkout/confirmacion`,
+    }) : undefined;
+    await reserveOrderStock(tx, rows);
+    const order = await tx.order.create({
       data: {
-        code,
-        userId: session.id,
-        status: "PENDING",
-        email: input.contact.email,
-        phone: input.contact.phone,
-        shippingName: input.contact.name,
-        street: input.shipping.street,
-        city: input.shipping.city,
-        state: input.shipping.state,
-        zip: input.shipping.zip,
-        country: input.shipping.country,
-        reference: input.shipping.reference ?? null,
-        subtotal,
-        shippingCost,
-        discountTotal,
-        total,
+        storeId, code, userId: session.id, status: "PENDING",
+        email: input.contact.email, phone: input.contact.phone, shippingName: input.contact.name,
+        street: input.shipping.street, city: input.shipping.city, state: input.shipping.state,
+        zip: input.shipping.zip, country: input.shipping.country, reference: input.shipping.reference ?? null,
+        subtotal, shippingCost, discountTotal, total,
       },
     });
-
     await tx.orderItem.createMany({
-      data: cart.lines.map((l) => ({
-        orderId: created.id,
-        productId: l.product.id,
-        variantId: l.variantId,
-        name: l.product.name,
-        brand: l.product.brand,
-        variantName: l.variantName,
-        unitPrice: l.product.price,
-        unitCost: costMap.get(l.product.id) ?? null,
-        qty: l.qty,
+      data: lines.map((line, index) => ({
+        storeId, orderId: order.id, productId: line.product.id, variantId: line.variantId,
+        name: line.product.name, brand: line.product.brand, variantName: line.variantName,
+        unitPrice: line.product.price, unitCost: rows[index].product.cost, qty: line.qty,
       })),
     });
-
-    // Descontar stock (de la variante si aplica; si no, del producto).
-    for (const l of cart.lines) {
-      if (l.variantId) {
-        await tx.productVariant.updateMany({
-          where: { id: l.variantId, stock: { gte: l.qty } },
-          data: { stock: { decrement: l.qty } },
-        });
-      } else {
-        await tx.product.updateMany({
-          where: { id: l.product.id, stock: { gte: l.qty } },
-          data: { stock: { decrement: l.qty } },
-        });
-      }
-    }
-
     await tx.payment.create({
       data: {
-        orderId: created.id,
-        method: input.method,
-        status: "PENDING",
-        amount: total,
-        // WOMPI: la referencia se completa con el id de transacción al aprobar.
-        // COD: queda null; el cobro es en efectivo al entregar.
-        reference: null,
+        storeId, orderId: order.id, method: input.method, status: "PENDING", amount: total,
+        gatewayReference: input.method === "WOMPI" ? buildPaymentReference(code, 1) : null,
       },
     });
-
-    await tx.orderStatusEvent.create({
-      data: { orderId: created.id, status: "PENDING" },
-    });
-
-    if (discount) {
-      await redeemDiscount(tx, discount, {
-        orderId: created.id, userId: session.id, amount: discountTotal,
-      });
+    await tx.orderStatusEvent.create({ data: { storeId, orderId: order.id, status: "PENDING" } });
+    if (discount) await redeemDiscount(tx, discount, { orderId: order.id, userId: session.id, amount: discountTotal });
+    // Conservar líneas nuevas; abortar si una cantidad cambió durante el checkout.
+    for (const row of rows) {
+      const removed = await tx.cartItem.deleteMany({ where: { id: row.id, storeId, cartId: current.id, qty: row.qty } });
+      if (removed.count !== 1) throw new ApiError(409, "Tu carrito cambió. Revisa la compra e intenta de nuevo.");
     }
-
-    return created;
-  });
-
-  await clearCurrentCart();
+    return { order, cart: { lines }, total, redirectUrl };
+  }, { isolationLevel: "ReadCommitted", timeout: 15000 });
 
   // Avisos y correo. Van fuera de la transacción y a propósito no se esperan
   // dentro de ella: si notificar o el correo fallan, la venta ya está hecha y
@@ -242,19 +157,7 @@ export async function checkout(input: CheckoutInput): Promise<CheckoutResult> {
   // que el correo sale ahora. Con Wompi el correo sale al APROBARSE el pago
   // (lo dispara applyWompiTransaction), no aquí.
   if (input.method === "COD") {
-    await sendOrderConfirmationEmail(order.id);
-  }
-
-  let redirectUrl: string | undefined;
-  if (input.method === "WOMPI") {
-    redirectUrl = buildWompiCheckoutUrl({
-      reference: buildPaymentReference(order.code, 1),
-      // COP no usa decimales en la práctica, pero Wompi exige centavos enteros.
-      amountInCents: Math.round(total * 100),
-      customerEmail: input.contact.email,
-      customerName: input.contact.name,
-      redirectUrl: `${process.env.APP_URL || "http://localhost:3000"}/checkout/confirmacion`,
-    });
+    await sendOrderConfirmationEmail(order.id).catch(() => console.error("[orders] No se pudo enviar la confirmación del pedido"));
   }
 
   return {
@@ -281,9 +184,10 @@ export interface MyOrderSummary {
 
 export async function getMyOrders(): Promise<MyOrderSummary[]> {
   const user = await requireUser();
+  const { id: storeId } = await getStoreContext();
   const orders = await prisma.order.findMany({
-    where: { userId: user.id },
-    include: { items: { select: { qty: true } } },
+    where: { storeId, userId: user.id },
+    include: { items: { where: { storeId }, select: { qty: true } } },
     orderBy: { createdAt: "desc" },
   });
   return orders.map((o) => ({
@@ -328,12 +232,13 @@ export interface OrderDetail {
  */
 export async function getOrderByCode(code: string): Promise<OrderDetail | null> {
   const session = await getSession();
+  const { id: storeId } = await getStoreContext();
   const o = await prisma.order.findUnique({
-    where: { code },
+    where: { code, storeId },
     include: {
-      items: true,
-      events: { orderBy: { createdAt: "asc" } },
-      payments: { orderBy: { createdAt: "desc" }, take: 1 },
+      items: { where: { storeId } },
+      events: { where: { storeId }, orderBy: { createdAt: "asc" } },
+      payments: { where: { storeId }, orderBy: { createdAt: "desc" }, take: 1 },
     },
   });
   if (!o) return null;
@@ -389,48 +294,29 @@ export async function retryOrderPayment(
   code: string,
 ): Promise<{ redirectUrl: string }> {
   const session = await getSession();
-
-  const order = await prisma.order.findUnique({
-    where: { code },
-    include: { payments: { orderBy: { createdAt: "asc" } } },
-  });
-  if (!order) throw new ApiError(404, "Pedido no encontrado");
-
-  const isOwner = session && order.userId === session.id;
-  const isAdmin = session?.role === "ADMIN";
-  if (!isOwner && !isAdmin) {
-    throw new ApiError(403, "No puedes pagar este pedido");
-  }
-  if (order.status !== "PENDING") {
-    throw new ApiError(409, "Este pedido ya no está pendiente de pago.");
-  }
-  if (!order.payments.some((p) => p.method === "WOMPI")) {
-    throw new ApiError(400, "Este pedido no se paga por Wompi.");
-  }
-  if (!wompiConfigured()) {
-    throw new ApiError(503, "Los pagos en línea no están configurados.");
-  }
-
-  // Un registro de pago por intento: además de dar el número de intento, deja
-  // rastro en /admin/payments de cuántas veces se probó.
-  const attempt = order.payments.length + 1;
-  await prisma.payment.create({
-    data: {
-      orderId: order.id,
-      method: "WOMPI",
-      status: "PENDING",
-      amount: order.total,
-      reference: null,
-    },
-  });
-
-  return {
-    redirectUrl: buildWompiCheckoutUrl({
-      reference: buildPaymentReference(order.code, attempt),
-      amountInCents: Math.round(Number(order.total) * 100),
-      customerEmail: order.email,
-      customerName: order.shippingName,
-      redirectUrl: `${process.env.APP_URL || "http://localhost:3000"}/checkout/confirmacion`,
-    }),
-  };
+  const store = await getStoreContext();
+  const storeId = store.id;
+  return prisma.$transaction(async (tx) => {
+    const found = await tx.order.findUnique({ where: { code, storeId }, select: { id: true } });
+    if (!found) throw new ApiError(404, "Pedido no encontrado");
+    await tx.order.update({ where: { id: found.id, storeId }, data: { updatedAt: new Date() } });
+    const order = await tx.order.findUniqueOrThrow({
+      where: { id: found.id, storeId },
+      include: { payments: { where: { storeId }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
+    });
+    if (!session || (order.userId !== session.id && session.role !== "ADMIN")) throw new ApiError(403, "No puedes pagar este pedido");
+    if (order.status !== "PENDING" || order.inventoryRestoredAt) throw new ApiError(409, "Este pedido ya no está pendiente de pago.");
+    if (!order.payments.some((payment) => payment.method === "WOMPI")) throw new ApiError(400, "Este pedido no se paga por Wompi.");
+    if (!wompiConfigured()) throw new ApiError(503, "Los pagos en línea no están configurados.");
+    const reference = buildPaymentReference(order.code, order.payments.length + 1);
+    const redirectUrl = buildWompiCheckoutUrl({
+      reference, amountInCents: Math.round(Number(order.total) * 100),
+      customerEmail: order.email, customerName: order.shippingName,
+      redirectUrl: `${store.origin}/checkout/confirmacion`,
+    });
+    await tx.payment.create({
+      data: { storeId, orderId: order.id, method: "WOMPI", status: "PENDING", amount: order.total, gatewayReference: reference },
+    });
+    return { redirectUrl };
+  }, { isolationLevel: "ReadCommitted" });
 }

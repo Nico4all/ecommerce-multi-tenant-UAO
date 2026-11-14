@@ -1,5 +1,5 @@
 import "server-only";
-import { prisma } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import { requireAdmin } from "../auth";
 import { ApiError } from "../api-helpers";
 import { sendOrderEmailManual, sendOrderShippedEmail } from "../order-emails";
@@ -147,52 +147,37 @@ export async function updateAdminOrder(
   input: OrderUpdateInput,
 ): Promise<AdminOrderDetail> {
   await requireAdmin();
-  const existing = await prisma.order.findUnique({ where: { id } });
-  if (!existing) throw new ApiError(404, "Pedido no encontrado");
-
-  const statusChanged = input.status && input.status !== existing.status;
-  // Solo la PRIMERA vez que llega a "Enviado" (shippedAt aún vacío): evita
-  // reenviar el aviso si el admin toca el estado varias veces por error.
-  const firstTimeShipped = input.status === "SHIPPED" && !existing.shippedAt;
-  const cancelling = input.status === "CANCELLED" && existing.status !== "CANCELLED";
-  const delivering = input.status === "DELIVERED" && existing.status !== "DELIVERED";
-
-  // Cancelar devuelve las unidades al inventario (el checkout las había
-  // reservado). `restockOrderOnce` es idempotente: no repone dos veces.
-  if (cancelling) await restockOrderOnce(id);
-
-  await prisma.order.update({
-    where: { id },
-    data: {
-      ...(input.status ? { status: input.status } : {}),
-      ...(input.carrier !== undefined ? { carrier: input.carrier } : {}),
-      ...(input.trackingNumber !== undefined
-        ? { trackingNumber: input.trackingNumber }
-        : {}),
-      ...(input.trackingUrl !== undefined
-        ? { trackingUrl: input.trackingUrl }
-        : {}),
-      ...(firstTimeShipped ? { shippedAt: new Date() } : {}),
-      ...(input.status === "DELIVERED" && !existing.deliveredAt
-        ? { deliveredAt: new Date() }
-        : {}),
-    },
-  });
-
-  if (statusChanged) {
-    await prisma.orderStatusEvent.create({
-      data: { orderId: id, status: input.status! },
+  const { id: storeId } = await getStoreContext();
+  const firstTimeShipped = await prisma.$transaction(async (tx) => {
+    const found = await tx.order.findUnique({ where: { id, storeId }, select: { id: true } });
+    if (!found) throw new ApiError(404, "Pedido no encontrado");
+    await tx.order.update({ where: { id, storeId }, data: { updatedAt: new Date() } });
+    const existing = await tx.order.findUniqueOrThrow({ where: { id, storeId } });
+    if ((existing.status === "CANCELLED" || existing.inventoryRestoredAt) && input.status && input.status !== "CANCELLED") {
+      throw new ApiError(409, "El inventario de este pedido fue liberado; no se puede reactivar");
+    }
+    const statusChanged = input.status && input.status !== existing.status;
+    const firstTimeShipped = input.status === "SHIPPED" && !existing.shippedAt;
+    if (input.status === "CANCELLED" && existing.status !== "CANCELLED") await restockOrderOnce(id, tx);
+    await tx.order.update({
+      where: { id, storeId },
+      data: {
+        ...(input.status ? { status: input.status } : {}),
+        ...(input.carrier !== undefined ? { carrier: input.carrier } : {}),
+        ...(input.trackingNumber !== undefined ? { trackingNumber: input.trackingNumber } : {}),
+        ...(input.trackingUrl !== undefined ? { trackingUrl: input.trackingUrl } : {}),
+        ...(firstTimeShipped ? { shippedAt: new Date() } : {}),
+        ...(input.status === "DELIVERED" && !existing.deliveredAt ? { deliveredAt: new Date() } : {}),
+      },
     });
-  }
-
-  // Contra entrega: al marcar ENTREGADO, el efectivo ya se cobró — el pago
-  // pendiente de esa orden pasa a completado sin paso manual extra.
-  if (delivering) {
-    await prisma.payment.updateMany({
-      where: { orderId: id, method: "COD", status: "PENDING" },
-      data: { status: "COMPLETED" },
-    });
-  }
+    if (statusChanged) await tx.orderStatusEvent.create({ data: { storeId, orderId: id, status: input.status! } });
+    if (input.status === "DELIVERED" && existing.status !== "DELIVERED") {
+      await tx.payment.updateMany({
+        where: { storeId, orderId: id, method: "COD", status: "PENDING" }, data: { status: "COMPLETED" },
+      });
+    }
+    return firstTimeShipped;
+  }, { isolationLevel: "ReadCommitted", timeout: 15000 });
 
   // Fuera de la escritura principal y sin esperar a que falle: el estado ya
   // cambió, el correo es un aviso adicional (igual que las notificaciones del
@@ -255,7 +240,7 @@ export async function verifyOrderPayment(
 
   const order = await prisma.order.findUnique({
     where: { id },
-    select: { code: true, status: true, payments: { select: { method: true } } },
+    select: { code: true, status: true, payments: { select: { method: true, gatewayReference: true } } },
   });
   if (!order) throw new ApiError(404, "Pedido no encontrado");
 
@@ -269,7 +254,8 @@ export async function verifyOrderPayment(
     throw new ApiError(503, "Wompi no está configurado en el servidor.");
   }
 
-  const txs = await fetchWompiTransactionsByReference(order.code).catch(() => {
+  const references = order.payments.filter((payment) => payment.method === "WOMPI" && payment.gatewayReference).map((payment) => payment.gatewayReference!);
+  const txs = await Promise.all(references.map(fetchWompiTransactionsByReference)).then((lists) => lists.flat()).catch(() => {
     throw new ApiError(502, "No pudimos consultar a Wompi. Intenta de nuevo.");
   });
 

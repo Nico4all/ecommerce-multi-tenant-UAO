@@ -411,6 +411,7 @@ model Order {
   shippingCost  Decimal @default(0) @db.Decimal(10, 2)
   discountTotal Decimal @default(0) @db.Decimal(10, 2)
   total         Decimal @db.Decimal(10, 2)
+  inventoryRestoredAt DateTime?
 
   // Rastreo del envío (lo fija el admin en /admin/orders/[id])
   carrier        String?
@@ -506,6 +507,8 @@ model Payment {
   status    PaymentStatus @default(PENDING)
   amount    Decimal       @db.Decimal(10, 2)
   reference String? // id de pasarela / comprobante Efecty / referencia PSE
+  gatewayReference String? @unique
+  gatewayTransactionId String? @unique
   createdAt DateTime      @default(now())
 
   @@index([storeId])

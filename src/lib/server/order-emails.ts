@@ -1,5 +1,5 @@
 import "server-only";
-import { prisma } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import { sendEmail } from "./email";
 import { buildOrderEmail, type OrderEmailInput } from "./order-email";
 
@@ -38,10 +38,6 @@ async function fetchOrderForEmail(orderId: string) {
   });
 }
 
-function appUrl() {
-  return process.env.APP_URL || "http://localhost:3000";
-}
-
 /**
  * Arma y manda el correo; si se envió, registra el EmailLog.
  * Devuelve la fecha de envío (del log) o `null` si no se pudo enviar.
@@ -51,7 +47,7 @@ async function deliverOrderEmail(
   kind: OrderEmailInput["kind"],
   trackingUrl: string | null,
 ): Promise<Date | null> {
-  const base = appUrl();
+  const base = (await getStoreContext()).origin;
   const mail = buildOrderEmail({
     code: order.code,
     shippingName: order.shippingName,
