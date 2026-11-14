@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Search, Pencil, Trash2, MoreHorizontal, Loader2 } from "lucide-react";
+import { Pencil, Trash2, PackageSearch, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
@@ -15,6 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FormSelect } from "@/components/admin/form-select";
+import { SearchField } from "@/components/admin/search-field";
 import {
   Dialog,
   DialogClose,
@@ -81,15 +82,13 @@ export function ProductsTable({
     <div className="rounded-xl border border-border bg-card">
       {/* Toolbar */}
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-        <div className="flex h-9 flex-1 items-center rounded-md border border-border bg-background px-3">
-          <Search className="size-4 text-muted-foreground" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar por nombre o marca…"
-            className="h-full flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground"
-          />
-        </div>
+        <SearchField
+          label="Buscar productos por nombre o marca"
+          placeholder="Buscar por nombre o marca…"
+          value={q}
+          onChange={setQ}
+          className="flex-1"
+        />
         <FormSelect
           value={cat}
           onChange={(v) => setCat(v || "all")}
@@ -105,12 +104,18 @@ export function ProductsTable({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Producto</TableHead>
-              <TableHead>Categoría</TableHead>
-              <TableHead className="text-right">Precio</TableHead>
-              <TableHead className="text-right">Stock</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="w-10" />
+              <TableHead scope="col">Producto</TableHead>
+              <TableHead scope="col">Categoría</TableHead>
+              <TableHead scope="col" className="text-right">
+                Precio
+              </TableHead>
+              <TableHead scope="col" className="text-right">
+                Stock
+              </TableHead>
+              <TableHead scope="col">Estado</TableHead>
+              <TableHead scope="col" className="w-20">
+                <span className="sr-only">Acciones</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -127,7 +132,7 @@ export function ProductsTable({
                     <div className="min-w-0">
                       <Link
                         href={`/admin/products/${p.id}`}
-                        className="line-clamp-1 font-medium hover:text-primary"
+                        className="line-clamp-1 rounded-sm font-medium outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         {p.name}
                       </Link>
@@ -170,20 +175,20 @@ export function ProductsTable({
                   />
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                  <div className="flex items-center gap-1">
                     <Link
                       href={`/admin/products/${p.id}`}
-                      aria-label="Editar"
-                      className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                      aria-label={`Editar ${p.name}`}
+                      className="grid size-8 place-items-center rounded-md text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <Pencil className="size-4" />
+                      <Pencil aria-hidden className="size-4" />
                     </Link>
                     <button
-                      aria-label="Eliminar"
+                      aria-label={`Eliminar ${p.name}`}
                       onClick={() => setToDelete(p)}
-                      className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      className="grid size-8 place-items-center rounded-md text-muted-foreground outline-none hover:bg-destructive/10 hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
                     >
-                      <Trash2 className="size-4" />
+                      <Trash2 aria-hidden className="size-4" />
                     </button>
                   </div>
                 </TableCell>
@@ -193,8 +198,12 @@ export function ProductsTable({
         </Table>
 
         {filtered.length === 0 && (
-          <div className="flex flex-col items-center gap-1 py-16 text-center">
-            <MoreHorizontal className="size-8 text-muted-foreground/50" />
+          <div role="status" className="flex flex-col items-center gap-1 py-16 text-center">
+            <PackageSearch
+              aria-hidden
+              strokeWidth={1.25}
+              className="size-8 text-muted-foreground/60"
+            />
             <p className="text-sm text-muted-foreground">
               No hay productos que coincidan con tu búsqueda.
             </p>

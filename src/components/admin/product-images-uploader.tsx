@@ -131,12 +131,12 @@ export function ProductImagesUploader({
                 type="button"
                 onClick={() => remove(i)}
                 aria-label="Quitar foto"
-                className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full bg-black/60 text-white opacity-100 transition-opacity hover:bg-black/80 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+                className="absolute right-1.5 top-1.5 grid size-6 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80"
               >
                 <X className="size-3.5" />
               </button>
 
-              <div className="absolute inset-x-1.5 bottom-1.5 flex justify-between opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:focus-within:opacity-100">
+              <div className="absolute inset-x-1.5 bottom-1.5 flex justify-between">
                 <button
                   type="button"
                   onClick={() => move(i, i - 1)}

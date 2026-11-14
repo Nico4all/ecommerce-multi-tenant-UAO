@@ -1,4 +1,4 @@
-import { ImageUp, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Banner } from "@/types";
 
@@ -24,7 +24,7 @@ export function BannerAdminCard({
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
       {/* Preview */}
-      <div className={cn("group relative", ratio)}>
+      <div className={cn("relative", ratio)}>
         <div
           className={cn(
             "relative flex h-full flex-col justify-center overflow-hidden p-4",
@@ -71,33 +71,25 @@ export function BannerAdminCard({
           )}
         </div>
 
-        {/* Overlay acciones */}
-        <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/50 opacity-100 backdrop-blur-sm transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+      </div>
+
+      {/* Meta y acción */}
+      <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
+        <span className="min-w-0 truncate text-xs text-muted-foreground">
+          → {banner.href}
+        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            {banner.cta ?? "Sin botón"}
+          </span>
           <button
             onClick={onEdit}
-            className="flex items-center gap-1.5 rounded-md bg-white/95 px-3 py-1.5 text-xs font-semibold text-slate-900"
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2 py-1 text-xs font-semibold outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <ImageUp className="size-3.5" />
-            Reemplazar
-          </button>
-          <button
-            onClick={onEdit}
-            className="flex items-center gap-1.5 rounded-md bg-white/20 px-3 py-1.5 text-xs font-semibold text-white ring-1 ring-white/40"
-          >
-            <Pencil className="size-3.5" />
+            <Pencil aria-hidden className="size-3.5" />
             Editar
           </button>
         </div>
-      </div>
-
-      {/* Meta */}
-      <div className="flex items-center justify-between gap-2 border-t border-border px-3 py-2">
-        <span className="truncate text-xs text-muted-foreground">
-          → {banner.href}
-        </span>
-        <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
-          {banner.cta ?? "Sin botón"}
-        </span>
       </div>
     </div>
   );

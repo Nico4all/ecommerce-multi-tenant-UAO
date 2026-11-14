@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Percent, Tag, Search, Loader2 } from "lucide-react";
+import { Percent, Tag, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { SearchField } from "@/components/admin/search-field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -139,15 +140,13 @@ export function OffersManager({ products }: { products: AdminProductRow[] }) {
 
       <div className="rounded-xl border border-border bg-card">
         <div className="p-4">
-          <div className="flex h-9 max-w-md items-center rounded-md border border-border bg-background px-3">
-            <Search className="size-4 text-muted-foreground" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Buscar producto…"
-              className="h-full flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground"
-            />
-          </div>
+          <SearchField
+            label="Buscar productos para poner en oferta"
+            placeholder="Buscar producto…"
+            value={q}
+            onChange={setQ}
+            className="max-w-md"
+          />
         </div>
 
         <div className="overflow-x-auto border-t border-border">

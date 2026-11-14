@@ -45,7 +45,7 @@ export function AdminNav({
   const pathname = usePathname();
 
   return (
-    <nav className="flex flex-col gap-1">
+    <nav aria-label="Secciones del panel" className="flex flex-col gap-1">
       {items.map((item) => {
         const active =
           item.href === "/admin"
@@ -59,17 +59,27 @@ export function AdminNav({
             onClick={onNavigate}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+              "relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring",
               active
                 ? "bg-primary/10 text-primary"
                 : "text-muted-foreground hover:bg-accent hover:text-foreground",
             )}
           >
-            <item.icon className="size-4 shrink-0" />
+            {/* La sección activa se marcaba solo con color. El remate rojo la
+                distingue también para quien no separa esos dos tonos. */}
+            {active && (
+              <span
+                aria-hidden
+                className="absolute inset-y-1.5 left-0 w-1 rounded-full bg-brand"
+              />
+            )}
+            <item.icon aria-hidden className="size-4 shrink-0" />
             {item.label}
             {badge > 0 && (
-              <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground">
-                {badge}
+              <span className="ml-auto grid min-w-5 place-items-center rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-bold text-primary-foreground tabular-nums">
+                {/* "3" a secas no dice de qué. */}
+                <span className="sr-only">{badge} sin abrir</span>
+                <span aria-hidden>{badge}</span>
               </span>
             )}
           </Link>
@@ -79,9 +89,9 @@ export function AdminNav({
       <Link
         href="/"
         onClick={onNavigate}
-        className="mt-4 flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        className="mt-4 flex items-center gap-3 rounded-md px-3 py-2 text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <ChevronLeft className="size-4" />
+        <ChevronLeft aria-hidden className="size-4" />
         Volver a la tienda
       </Link>
     </nav>

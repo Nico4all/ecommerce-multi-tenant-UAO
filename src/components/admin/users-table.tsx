@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Search, ShieldCheck, UsersRound } from "lucide-react";
+import { ShieldCheck, UsersRound } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -12,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { FormSelect } from "@/components/admin/form-select";
+import { SearchField } from "@/components/admin/search-field";
 import { StatusBadge } from "@/components/admin/status-badge";
 import { formatPrice } from "@/lib/format";
 import type { AdminUserRow } from "@/lib/server/admin/users";
@@ -43,15 +44,13 @@ export function UsersTable({ users }: { users: AdminUserRow[] }) {
   return (
     <div className="rounded-xl border border-border bg-card">
       <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
-        <div className="flex h-9 flex-1 items-center rounded-md border border-border bg-background px-3">
-          <Search className="size-4 text-muted-foreground" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar por nombre, correo o ciudad…"
-            className="h-full flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground"
-          />
-        </div>
+        <SearchField
+          label="Buscar usuarios por nombre, correo o ciudad"
+          placeholder="Buscar por nombre, correo o ciudad…"
+          value={q}
+          onChange={setQ}
+          className="flex-1"
+        />
         <FormSelect
           value={role}
           onChange={(v) => setRole((v as typeof role) || "all")}
@@ -68,12 +67,18 @@ export function UsersTable({ users }: { users: AdminUserRow[] }) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Cliente</TableHead>
-              <TableHead>Ubicación</TableHead>
-              <TableHead className="text-right">Pedidos</TableHead>
-              <TableHead className="text-right">Total gastado</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="w-10" />
+              <TableHead scope="col">Cliente</TableHead>
+              <TableHead scope="col">Ubicación</TableHead>
+              <TableHead scope="col" className="text-right">
+                Pedidos
+              </TableHead>
+              <TableHead scope="col" className="text-right">
+                Total gastado
+              </TableHead>
+              <TableHead scope="col">Estado</TableHead>
+              <TableHead scope="col" className="w-14">
+                <span className="sr-only">Acciones</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -88,7 +93,7 @@ export function UsersTable({ users }: { users: AdminUserRow[] }) {
                       <span className="flex items-center gap-1.5">
                         <Link
                           href={`/admin/users/${u.id}`}
-                          className="font-medium hover:text-primary"
+                          className="rounded-sm font-medium outline-none hover:text-primary focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           {u.name}
                         </Link>
@@ -118,7 +123,8 @@ export function UsersTable({ users }: { users: AdminUserRow[] }) {
                 <TableCell>
                   <Link
                     href={`/admin/users/${u.id}`}
-                    className="text-sm font-medium text-primary opacity-100 transition-opacity hover:underline sm:opacity-0 sm:group-hover:opacity-100"
+                    aria-label={`Ver la ficha de ${u.name}`}
+                    className="rounded-sm text-sm font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     Ver
                   </Link>
@@ -129,8 +135,8 @@ export function UsersTable({ users }: { users: AdminUserRow[] }) {
         </Table>
 
         {filtered.length === 0 && (
-          <div className="flex flex-col items-center gap-1 py-16 text-center">
-            <UsersRound className="size-8 text-muted-foreground/50" />
+          <div role="status" className="flex flex-col items-center gap-1 py-16 text-center">
+            <UsersRound aria-hidden strokeWidth={1.25} className="size-8 text-muted-foreground/60" />
             <p className="text-sm text-muted-foreground">
               No hay usuarios que coincidan con tu búsqueda.
             </p>

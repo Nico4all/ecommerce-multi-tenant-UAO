@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -13,6 +12,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StatusBadge } from "@/components/admin/status-badge";
+import { SearchField } from "@/components/admin/search-field";
 import { formatPrice } from "@/lib/format";
 import {
   ORDER_STATUS_LABEL,
@@ -77,35 +77,39 @@ export function OrdersTable({ orders }: { orders: AdminOrderRow[] }) {
       </div>
 
       <div className="p-4">
-        <div className="flex h-9 max-w-md items-center rounded-md border border-border bg-background px-3">
-          <Search className="size-4 text-muted-foreground" />
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar por código o cliente…"
-            className="h-full flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground"
-          />
-        </div>
+        <SearchField
+          label="Buscar pedidos por código o cliente"
+          placeholder="Buscar por código o cliente…"
+          value={q}
+          onChange={setQ}
+          className="max-w-md"
+        />
       </div>
 
       <div className="overflow-x-auto border-t border-border">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Pedido</TableHead>
-              <TableHead>Cliente</TableHead>
-              <TableHead>Fecha</TableHead>
-              <TableHead className="text-right">Artículos</TableHead>
-              <TableHead>Método</TableHead>
-              <TableHead>Estado</TableHead>
-              <TableHead className="text-right">Total</TableHead>
-              <TableHead className="w-14" />
+              <TableHead scope="col">Pedido</TableHead>
+              <TableHead scope="col">Cliente</TableHead>
+              <TableHead scope="col">Fecha</TableHead>
+              <TableHead scope="col" className="text-right">
+                Artículos
+              </TableHead>
+              <TableHead scope="col">Método</TableHead>
+              <TableHead scope="col">Estado</TableHead>
+              <TableHead scope="col" className="text-right">
+                Total
+              </TableHead>
+              <TableHead scope="col" className="w-24">
+                <span className="sr-only">Acciones</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {filtered.map((o) => (
               <TableRow key={o.id} className="group">
-                <TableCell className="font-medium">{o.code}</TableCell>
+                <TableCell className="font-mono font-medium">{o.code}</TableCell>
                 <TableCell>{o.userName}</TableCell>
                 <TableCell className="text-muted-foreground">{o.date}</TableCell>
                 <TableCell className="text-right tabular-nums">{o.items}</TableCell>
@@ -121,7 +125,8 @@ export function OrdersTable({ orders }: { orders: AdminOrderRow[] }) {
                 <TableCell className="text-right">
                   <Link
                     href={`/admin/orders/${o.id}`}
-                    className="text-sm font-medium text-primary opacity-100 transition-opacity hover:underline sm:opacity-0 sm:group-hover:opacity-100"
+                    aria-label={`Gestionar el pedido ${o.code}`}
+                    className="rounded-sm text-sm font-medium text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     Gestionar
                   </Link>
