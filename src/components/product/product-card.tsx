@@ -24,9 +24,13 @@ export function ProductCard({
       {/* Wishlist */}
       <WishlistHeart productId={product.id} productName={product.name} />
 
+      {/* El anillo de foco faltaba: con `outline-none` y nada que lo
+          sustituyera, al recorrer el catálogo con el tabulador no se veía
+          en qué producto estabas. Es la tarjeta de portada, categoría,
+          búsqueda, ofertas y favoritos. */}
       <Link
         href={`/product/${product.slug}`}
-        className="flex flex-1 flex-col outline-none"
+        className="flex flex-1 flex-col rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <div className="relative">
           <ProductImage
@@ -53,7 +57,7 @@ export function ProductCard({
           <div className="mt-auto pt-1.5">
             <PriceTag price={product.price} oldPrice={product.oldPrice} />
             {product.shippingCost === 0 && (
-              <p className="mt-1 text-[11px] font-medium text-success">
+              <p className="mt-1 text-[11px] font-medium text-success-ink">
                 Envío gratis
               </p>
             )}

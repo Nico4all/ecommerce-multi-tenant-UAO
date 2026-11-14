@@ -10,7 +10,11 @@
   /* Manual de Identidad UAO (págs. 32-33): DM Sans es la tipografía principal
      de interfaz; Arial es la alterna autorizada cuando DM Sans no carga. */
   --font-sans: var(--font-dm-sans), Arial, Helvetica, sans-serif;
-  --font-mono: var(--font-mono);
+  /* Apuntaba a sí misma: la declaración quedaba inválida y `font-mono` no
+     hacía nada. No se carga ninguna fuente mono (seria una descarga mas
+     para cuatro codigos de pedido), asi que se usa la pila del sistema. */
+  --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono",
+    "Liberation Mono", Menlo, monospace;
   --font-heading: var(--font-dm-sans), Arial, Helvetica, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);

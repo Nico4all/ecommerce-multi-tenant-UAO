@@ -253,7 +253,7 @@ export function CheckoutForm({
             ref={errorRef}
             tabIndex={-1}
             role="alert"
-            className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive outline-none"
+            className="flex items-start gap-2 rounded-md bg-destructive/10 p-3 text-sm text-destructive outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <AlertCircle aria-hidden className="mt-0.5 size-4 shrink-0" />
             {error}

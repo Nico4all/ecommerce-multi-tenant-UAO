@@ -89,7 +89,9 @@ export function FilterSidebar({
       <Separator />
 
       {/* Ofertas */}
-      <label className="flex cursor-pointer items-center justify-between gap-2">
+      {/* Mismo anillo que las otras dos listas de filtros: era la unica
+          casilla del panel sin estado de foco propio. */}
+      <label className="flex cursor-pointer items-center justify-between gap-2 rounded-md px-1.5 py-1 has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ring">
         <span className="text-sm font-medium">Solo ofertas</span>
         <input
           type="checkbox"

@@ -158,7 +158,7 @@ export function CartView({ cart: initial }: { cart: CartSummary }) {
                     </span>
                   )}
                   {l.product.shippingCost === 0 && (
-                    <span className="mt-0.5 text-[11px] font-medium text-success">
+                    <span className="mt-0.5 text-[11px] font-medium text-success-ink">
                       Envío gratis
                     </span>
                   )}
@@ -246,14 +246,20 @@ export function CartView({ cart: initial }: { cart: CartSummary }) {
             </div>
           ) : (
             <div className="flex gap-2">
-              <div className="flex h-10 min-w-0 flex-1 items-center rounded-md border border-border px-2">
-                <Tag className="size-4 text-muted-foreground" />
+              {/* El campo no tenía etiqueta (el marcador desaparece al
+                  escribir y no lo anuncia el lector) ni anillo de foco. */}
+              <label htmlFor="cupon" className="sr-only">
+                Código de descuento
+              </label>
+              <div className="flex h-10 min-w-0 flex-1 items-center rounded-md border border-border px-2 transition-shadow focus-within:ring-2 focus-within:ring-ring">
+                <Tag aria-hidden className="size-4 shrink-0 text-muted-foreground" />
                 <input
+                  id="cupon"
                   value={couponCode}
                   onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
                   onKeyDown={(e) => e.key === "Enter" && applyCoupon()}
                   placeholder="Código de descuento"
-                  className="h-full flex-1 bg-transparent px-2 text-sm uppercase outline-none placeholder:normal-case placeholder:text-muted-foreground"
+                  className="h-full min-w-0 flex-1 bg-transparent px-2 text-sm uppercase outline-none placeholder:normal-case placeholder:text-muted-foreground"
                 />
               </div>
               <Button
@@ -297,7 +303,7 @@ export function CartView({ cart: initial }: { cart: CartSummary }) {
               <dt className="text-muted-foreground">Envío</dt>
               <dd className="shrink-0 tabular-nums">
                 {shipping === 0 ? (
-                  <span className="font-medium text-success">Gratis</span>
+                  <span className="font-medium text-success-ink">Gratis</span>
                 ) : (
                   formatPrice(shipping)
                 )}
@@ -325,7 +331,7 @@ export function CartView({ cart: initial }: { cart: CartSummary }) {
             <ArrowRight className="size-5" />
           </Link>
           <p className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
-            <ShieldCheck className="size-3.5 text-success" />
+            <ShieldCheck aria-hidden className="size-3.5 text-success-ink" />
             Pago 100% seguro y protegido
           </p>
         </div>

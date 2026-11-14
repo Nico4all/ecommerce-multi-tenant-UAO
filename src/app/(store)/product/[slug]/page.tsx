@@ -195,7 +195,7 @@ export default async function ProductPage({
             <p className="mt-1 text-xs text-muted-foreground">
               Impuestos incluidos.{" "}
               {product.shippingCost === 0 && (
-                <span className="font-medium text-success">Envío gratis.</span>
+                <span className="font-medium text-success-ink">Envío gratis.</span>
               )}
             </p>
           </div>
