@@ -118,8 +118,8 @@ export async function getAdminUser(id: string): Promise<AdminUserDetail | null> 
   if (!u) return null;
 
   const orders = await prisma.order.findMany({
-    where: { userId: id },
-    include: { items: { select: { qty: true } } },
+    where: { storeId, userId: id },
+    include: { items: { where: { storeId }, select: { qty: true } } },
     orderBy: { createdAt: "desc" },
   });
 

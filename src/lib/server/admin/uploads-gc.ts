@@ -1,10 +1,11 @@
 import "server-only";
-import { prisma } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import { requireAdmin } from "../auth";
 import {
   listUploads,
   deleteUpload,
   keyFromPublicUrl,
+  uploadKeyBelongsToStore,
 } from "../storage";
 
 /**
@@ -40,18 +41,19 @@ export interface SweepReport {
 
 /** Junta las keys de todas las imágenes que la BD referencia hoy. */
 async function referencedKeys(): Promise<Set<string>> {
+  const { id: storeId } = await getStoreContext();
   const [images, categories, banners, sections] = await Promise.all([
-    prisma.productImage.findMany({ select: { url: true } }),
+    prisma.productImage.findMany({ where: { storeId }, select: { url: true } }),
     prisma.category.findMany({
-      where: { imageUrl: { not: null } },
+      where: { storeId, imageUrl: { not: null } },
       select: { imageUrl: true },
     }),
     prisma.banner.findMany({
-      where: { imageUrl: { not: null } },
+      where: { storeId, imageUrl: { not: null } },
       select: { imageUrl: true },
     }),
     prisma.homeSection.findMany({
-      where: { bgImageUrl: { not: null } },
+      where: { storeId, bgImageUrl: { not: null } },
       select: { bgImageUrl: true },
     }),
   ]);
@@ -60,7 +62,7 @@ async function referencedKeys(): Promise<Set<string>> {
   const add = (url: string | null) => {
     if (!url) return;
     const key = keyFromPublicUrl(url);
-    if (key) keys.add(key); // se ignoran URLs externas o placeholders
+    if (key && uploadKeyBelongsToStore(key, storeId)) keys.add(key);
   };
 
   for (const i of images) add(i.url);

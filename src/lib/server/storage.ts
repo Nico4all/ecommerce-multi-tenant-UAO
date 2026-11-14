@@ -1,146 +1,139 @@
 import "server-only";
 import { randomUUID, createHash } from "node:crypto";
-import { mkdir, writeFile, readFile, readdir, stat, unlink } from "node:fs/promises";
+import { mkdir, writeFile, readFile, readdir, lstat, unlink } from "node:fs/promises";
 import path from "node:path";
-import { getStoreContext } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import { ORIGINAL_STORE_ID } from "../../../prisma/stores";
+import { ApiError } from "./api-helpers";
 
-/**
- * Almacenamiento de archivos subidos desde el panel.
- *
- * Los archivos viven en `uploads/` en la raíz del proyecto, FUERA de `public/`:
- * así no dependemos de que Next copie la carpeta al construir, y quien los sirve
- * es `/api/uploads/[...path]`, que controla el content-type y la caché.
- * En la BD solo se guarda la ruta pública, nunca el binario.
- *
- * Todo se aísla detrás de esta capa: para migrar a S3 o Cloudinary basta con
- * reimplementar estas cuatro funciones.
- */
-
+// Datos de ejecución: el bundle no debe incorporar archivos subidos ni inferir el proyecto entero.
 const UPLOAD_DIR = path.join(process.cwd(), "uploads");
-
-/** Prefijo público. Debe coincidir con la ruta del route handler que sirve. */
 export const PUBLIC_PREFIX = "/api/uploads";
-
-export function storeUploadPrefix(storeId: string) {
-  return `stores/${createHash("sha256").update(storeId).digest("hex")}/`;
-}
+export const storeUploadPrefix = (storeId: string) => `stores/${createHash("sha256").update(storeId).digest("hex")}/`;
 
 export function uploadKeyBelongsToStore(key: string, storeId: string): boolean {
-  if (key.includes("\\") || key.split("/").some((part) => !part || part === "." || part === "..")) return false;
+  if (/[\\%:\x00-\x1f\x7f]/.test(key) || key.split("/").some((part) => !part || part === "." || part === "..")) return false;
   if (key.startsWith("stores/")) return key.startsWith(storeUploadPrefix(storeId));
-  // Antes de E03 únicamente existía el almacén de la tienda original.
   return storeId === ORIGINAL_STORE_ID && /^\d{4}-\d{2}\/[^/]+$/.test(key);
 }
 
-/**
- * Resuelve una ruta relativa dentro de `uploads/` y verifica que no se escape.
- * Sin esto, un `../../.env` en la URL leería archivos del servidor.
- */
+/** Comprobación léxica; las operaciones también rechazan enlaces simbólicos. */
 export function resolveUploadPath(relative: string): string | null {
-  // Se normaliza y se comprueba que el resultado siga colgando de UPLOAD_DIR.
-  const target = path.resolve(UPLOAD_DIR, relative);
-  const base = path.resolve(UPLOAD_DIR);
-  if (target !== base && !target.startsWith(base + path.sep)) return null;
-  return target;
+  const target = path.resolve(UPLOAD_DIR, relative), base = path.resolve(UPLOAD_DIR);
+  return target === base || target.startsWith(base + path.sep) ? target : null;
 }
 
-/** Guarda el binario y devuelve su ruta pública (lo que va a la BD). */
-export async function saveUpload(
-  data: Buffer,
-  ext: string,
-): Promise<{ url: string; key: string }> {
-  const store = await getStoreContext();
-  if (!/^[a-z\d]+$/i.test(ext)) throw new Error("Extensión de subida inválida");
-  // Se agrupa por año-mes para que la carpeta no acabe con miles de archivos.
+async function checkedPath(relative: string, createParents = false): Promise<string | null> {
+  const target = resolveUploadPath(relative);
+  if (!target || /[\\%:\x00-\x1f\x7f]/.test(relative) || relative.split("/").some((part) => !part || part === "." || part === "..")) return null;
+  if (createParents) await mkdir(UPLOAD_DIR, { recursive: true });
+  try {
+    const root = await lstat(/* turbopackIgnore: true */ UPLOAD_DIR);
+    if (!root.isDirectory() || root.isSymbolicLink()) return null;
+    const parts = relative.split("/");
+    for (let index = 0; index < parts.length; index++) {
+      const current = path.join(UPLOAD_DIR, ...parts.slice(0, index + 1));
+      let info;
+      try { info = await lstat(/* turbopackIgnore: true */ current); }
+      catch (error) {
+        if (!(error && typeof error === "object" && "code" in error && error.code === "ENOENT")) throw error;
+        if (index === parts.length - 1) return target;
+        if (!createParents) return null;
+        await mkdir(current, { recursive: true });
+        info = await lstat(/* turbopackIgnore: true */ current);
+      }
+      if (info.isSymbolicLink() || (index < parts.length - 1 && !info.isDirectory())) return null;
+    }
+    return target;
+  } catch { return null; }
+}
+
+export async function saveUpload(data: Buffer, ext: string): Promise<{ url: string; key: string }> {
+  const { id: storeId } = await getStoreContext();
+  if (!/^[a-z\d]+$/i.test(ext)) throw new ApiError(400, "Extensión de subida inválida");
   const now = new Date();
   const folder = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const name = `${randomUUID()}.${ext}`;
-  const key = `${storeUploadPrefix(store.id)}${folder}/${name}`;
-
-  const target = resolveUploadPath(key);
-  if (!target) throw new Error("Ruta de subida inválida");
-
-  await mkdir(path.dirname(target), { recursive: true });
-  await writeFile(target, data);
-
+  const key = `${storeUploadPrefix(storeId)}${folder}/${randomUUID()}.${ext}`;
+  const target = await checkedPath(key, true);
+  if (!target) throw new ApiError(403, "Ruta de subida no permitida");
+  await writeFile(target, data, { flag: "wx" });
   return { url: `${PUBLIC_PREFIX}/${key}`, key };
 }
 
-/** Lee un archivo ya subido. `null` si no existe o si la ruta se sale. */
 export async function readUpload(relative: string): Promise<Buffer | null> {
-  const store = await getStoreContext();
-  if (!uploadKeyBelongsToStore(relative, store.id)) return null;
-  const target = resolveUploadPath(relative);
+  const { id: storeId } = await getStoreContext();
+  if (!uploadKeyBelongsToStore(relative, storeId)) return null;
+  const target = await checkedPath(relative);
   if (!target) return null;
+  try { return await readFile(/* turbopackIgnore: true */ target); } catch { return null; }
+}
+
+/** Canonicalizar URL absoluta/relativa y query sin confundir claves de otra tienda. */
+export function keyFromPublicUrl(value: string): string | null {
   try {
-    return await readFile(target);
-  } catch {
-    return null;
-  }
+    const pathname = value.startsWith("/") ? value.split(/[?#]/)[0] : new URL(value).pathname;
+    const decoded = decodeURIComponent(pathname);
+    if (/[\\%:\x00-\x1f\x7f]/.test(decoded) || decoded.split("/").some((part) => part === "." || part === "..")) return null;
+    if (!decoded.startsWith(PUBLIC_PREFIX + "/")) return null;
+    const key = decoded.slice(PUBLIC_PREFIX.length + 1);
+    return resolveUploadPath(key) ? key : null;
+  } catch { return null; }
 }
 
-/**
- * Convierte una ruta pública (`/api/uploads/2026-07/x.webp`) en su key
- * (`2026-07/x.webp`). Devuelve `null` si la URL no es de nuestro almacén
- * (p.ej. una imagen externa o un placeholder del seed): así la limpieza de
- * huérfanos nunca confunde un enlace ajeno con un archivo local.
- */
-export function keyFromPublicUrl(url: string): string | null {
-  const prefix = `${PUBLIC_PREFIX}/`;
-  if (!url.startsWith(prefix)) return null;
-  const key = url.slice(prefix.length);
-  // Se valida por la misma vía que al leer: descarta `../` y rutas raras.
-  return resolveUploadPath(key) ? key : null;
-}
-
-/** Un archivo en `uploads/` con su tamaño en bytes. */
-export interface UploadEntry {
-  key: string;
-  size: number;
-}
-
-/**
- * Lista todos los archivos bajo `uploads/` (recorriendo las subcarpetas
- * año-mes) con su tamaño. Carpeta inexistente o vacía => `[]`.
- */
-export async function listUploads(): Promise<UploadEntry[]> {
+/** Antes de guardar una referencia, comprobar también namespace y dominio de uploads. */
+export async function assertImageReferences(values: (string | null | undefined)[]) {
   const store = await getStoreContext();
-  let entries: string[];
-  try {
-    // Sin `withFileTypes`: devuelve rutas relativas a UPLOAD_DIR (con separador
-    // del SO). Recorre las subcarpetas año-mes.
-    entries = await readdir(UPLOAD_DIR, { recursive: true });
-  } catch {
-    return []; // aún no se ha subido nada
-  }
-
-  const out: UploadEntry[] = [];
-  for (const entry of entries) {
-    const key = entry.split(path.sep).join("/");
-    if (!uploadKeyBelongsToStore(key, store.id)) continue;
-    const abs = path.join(UPLOAD_DIR, entry);
-    try {
-      const info = await stat(abs);
-      if (!info.isFile()) continue; // se saltan las carpetas año-mes
-      out.push({ key, size: info.size });
-    } catch {
-      // desapareció entre el listado y el stat: se ignora
+  for (const value of values) {
+    if (!value) continue;
+    let absolute: URL | undefined;
+    try { if (!value.startsWith("/")) absolute = new URL(value); }
+    catch { throw new ApiError(400, "URL de imagen inválida"); }
+    if (value.startsWith("//") || (absolute && (!["http:", "https:"].includes(absolute.protocol) || absolute.username || absolute.password))) throw new ApiError(400, "URL de imagen no permitida");
+    let decoded: string;
+    try { decoded = decodeURIComponent(absolute?.pathname ?? value.split(/[?#]/)[0]); }
+    catch { throw new ApiError(400, "URL de imagen inválida"); }
+    if (decoded.startsWith(PUBLIC_PREFIX)) {
+      const key = keyFromPublicUrl(value);
+      if (!key || !uploadKeyBelongsToStore(key, store.id)) throw new ApiError(403, "La imagen pertenece a otra tienda o su ruta es inválida");
+      if (absolute && absolute.origin !== store.origin) {
+        const domain = absolute.protocol === "https:" && !absolute.port && await prisma.storeDomain.findFirst({
+          where: { storeId: store.id, hostname: absolute.hostname, verifiedAt: { not: null } }, select: { id: true },
+        });
+        if (!domain) throw new ApiError(403, "El dominio de la imagen no pertenece a esta tienda");
+      }
     }
   }
+}
+
+export interface UploadEntry { key: string; size: number }
+
+/** Recorrer únicamente el namespace propio; no seguir symlinks ni enumerar otras tiendas. */
+export async function listUploads(): Promise<UploadEntry[]> {
+  const { id: storeId } = await getStoreContext();
+  const roots = [storeUploadPrefix(storeId).slice(0, -1)];
+  if (storeId === ORIGINAL_STORE_ID) {
+    try { roots.push(...(await readdir(/* turbopackIgnore: true */ UPLOAD_DIR)).filter((name) => /^\d{4}-\d{2}$/.test(name))); } catch { /* Sin archivos históricos. */ }
+  }
+  const out: UploadEntry[] = [];
+  const visit = async (relative: string): Promise<void> => {
+    const target = await checkedPath(relative);
+    if (!target) return;
+    try {
+      const info = await lstat(/* turbopackIgnore: true */ target);
+      if (info.isSymbolicLink()) return;
+      if (info.isDirectory()) {
+        for (const name of await readdir(/* turbopackIgnore: true */ target)) await visit(`${relative}/${name}`);
+      } else if (info.isFile() && uploadKeyBelongsToStore(relative, storeId)) out.push({ key: relative, size: info.size });
+    } catch { /* Un archivo puede desaparecer durante el recorrido. */ }
+  };
+  for (const root of roots) await visit(root);
   return out;
 }
 
-/** Borra un archivo subido. `true` si se borró, `false` si no existía o la ruta se sale. */
 export async function deleteUpload(key: string): Promise<boolean> {
-  const store = await getStoreContext();
-  if (!uploadKeyBelongsToStore(key, store.id)) return false;
-  const target = resolveUploadPath(key);
+  const { id: storeId } = await getStoreContext();
+  if (!uploadKeyBelongsToStore(key, storeId)) return false;
+  const target = await checkedPath(key);
   if (!target) return false;
-  try {
-    await unlink(target);
-    return true;
-  } catch {
-    return false;
-  }
+  try { await unlink(target); return true; } catch { return false; }
 }

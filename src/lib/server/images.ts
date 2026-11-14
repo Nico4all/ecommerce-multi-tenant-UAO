@@ -2,6 +2,8 @@ import "server-only";
 import sharp from "sharp";
 import { ApiError } from "./api-helpers";
 import { saveUpload } from "./storage";
+import { requireAdmin } from "./auth";
+import { getStoreContext } from "@/lib/prisma";
 import {
   IMAGE_PRESETS,
   MAX_UPLOAD_BYTES,
@@ -33,6 +35,8 @@ export async function processAndStoreImage(
   input: Buffer,
   preset: ImagePreset,
 ): Promise<ProcessedImage> {
+  await requireAdmin();
+  if (!Object.hasOwn(IMAGE_PRESETS, preset)) throw new ApiError(400, "Tipo de imagen desconocido");
   if (input.byteLength > MAX_UPLOAD_BYTES) {
     throw new ApiError(
       413,
@@ -66,7 +70,7 @@ export async function processAndStoreImage(
   const { url } = await saveUpload(output.data, "webp");
 
   return {
-    url,
+    url: new URL(url, (await getStoreContext()).origin).href,
     width: output.info.width,
     height: output.info.height,
     bytes: output.data.byteLength,

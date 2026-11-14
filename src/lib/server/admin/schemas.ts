@@ -1,6 +1,9 @@
 import "server-only";
 import { z } from "zod";
-import { imageRefSchema, MAX_PRODUCT_IMAGES } from "@/lib/image-limits";
+import { imageRefSchema as legacyImageRefSchema, MAX_PRODUCT_IMAGES } from "@/lib/image-limits";
+
+// Adaptador backend: conservar URLs previas y aceptar rutas actuales de uploads/assets.
+const imageRefSchema = z.union([legacyImageRefSchema, z.string().trim().regex(/^\/(?!\/)[^\\\x00-\x1f]+$/)]);
 
 /** Esquemas zod de los endpoints /api/admin/** (los route.ts no pueden exportarlos). */
 

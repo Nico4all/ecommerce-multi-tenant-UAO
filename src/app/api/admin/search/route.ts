@@ -17,12 +17,12 @@ export const GET = withErrorHandling(async (req: Request) => {
   const like = { contains: q };
   const [products, orders, users] = await Promise.all([
     prisma.product.findMany({
-      where: { OR: [{ name: like }, { brand: like }, { sku: like }] },
+      where: { storeId, OR: [{ name: like }, { brand: like }, { sku: like }] },
       take: 5,
       select: { id: true, name: true, brand: true },
     }),
     prisma.order.findMany({
-      where: { OR: [{ code: like }, { shippingName: like }, { email: like }] },
+      where: { storeId, OR: [{ code: like }, { shippingName: like }, { email: like }] },
       take: 5,
       orderBy: { createdAt: "desc" },
       select: { id: true, code: true, shippingName: true },

@@ -63,22 +63,24 @@ export interface AdminOrderDetail {
   emailsSent: number;
 }
 
-const orderInclude = {
-  items: { include: { product: { select: { categorySlug: true } } } },
-  payments: { orderBy: { createdAt: "desc" as const }, take: 1 },
+const orderInclude = (storeId: string) => ({
+  items: { where: { storeId }, include: { product: { select: { categorySlug: true } } } },
+  payments: { where: { storeId }, orderBy: { createdAt: "desc" as const }, take: 1 },
   user: { select: { name: true, email: true } },
-  _count: { select: { emails: true } },
-};
+  _count: { select: { emails: { where: { storeId } } } },
+});
 
 export async function listAdminOrders(
   status?: AdminOrderStatus,
+  ids?: string[],
 ): Promise<AdminOrderRow[]> {
   await requireAdmin();
+  const { id: storeId } = await getStoreContext();
   const rows = await prisma.order.findMany({
-    where: status ? { status } : undefined,
+    where: { storeId, ...(status ? { status } : {}), ...(ids ? { id: { in: ids } } : {}) },
     include: {
-      items: { select: { qty: true } },
-      payments: { orderBy: { createdAt: "desc" }, take: 1 },
+      items: { where: { storeId }, select: { qty: true } },
+      payments: { where: { storeId }, orderBy: { createdAt: "desc" }, take: 1 },
       user: { select: { name: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -97,9 +99,10 @@ export async function listAdminOrders(
 
 export async function getAdminOrder(id: string): Promise<AdminOrderDetail | null> {
   await requireAdmin();
+  const { id: storeId } = await getStoreContext();
   const o = await prisma.order.findUnique({
-    where: { id },
-    include: orderInclude,
+    where: { id, storeId },
+    include: orderInclude(storeId),
   });
   if (!o) return null;
   return {
@@ -196,6 +199,8 @@ export async function sendOrderEmail(
   includeTracking: boolean,
 ): Promise<{ to: string; sentAt: string }> {
   await requireAdmin();
+  const { id: storeId } = await getStoreContext();
+  if (!await prisma.order.findUnique({ where: { id, storeId }, select: { id: true } })) throw new ApiError(404, "Pedido no encontrado");
   const result = await sendOrderEmailManual(id, includeTracking);
   if (result === "not_found") throw new ApiError(404, "Pedido no encontrado");
   if (!result) {
@@ -237,10 +242,11 @@ export async function verifyOrderPayment(
   id: string,
 ): Promise<VerifyPaymentResult> {
   await requireAdmin();
+  const { id: storeId } = await getStoreContext();
 
   const order = await prisma.order.findUnique({
-    where: { id },
-    select: { code: true, status: true, payments: { select: { method: true, gatewayReference: true } } },
+    where: { id, storeId },
+    select: { code: true, status: true, payments: { where: { storeId }, select: { method: true, gatewayReference: true } } },
   });
   if (!order) throw new ApiError(404, "Pedido no encontrado");
 
@@ -295,9 +301,11 @@ export interface AdminPaymentRow {
   date: string;
 }
 
-export async function listAdminPayments(): Promise<AdminPaymentRow[]> {
+export async function listAdminPayments(selection?: { ids?: string[]; orderId?: string }): Promise<AdminPaymentRow[]> {
   await requireAdmin();
+  const { id: storeId } = await getStoreContext();
   const rows = await prisma.payment.findMany({
+    where: { storeId, ...(selection?.ids ? { id: { in: selection.ids } } : {}), ...(selection?.orderId ? { orderId: selection.orderId } : {}) },
     include: {
       order: {
         select: {

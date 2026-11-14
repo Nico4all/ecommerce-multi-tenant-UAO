@@ -1,5 +1,5 @@
 import "server-only";
-import { prisma } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import { getSession, requireAdmin } from "./auth";
 import { notifySupportMessage } from "./notifications";
 import { alertStoreSupportMessage } from "./store-alerts";
@@ -166,8 +166,10 @@ export async function listSupportMessages(filter?: {
   kind?: SupportKind;
 }): Promise<SupportMessageDTO[]> {
   await requireAdmin();
+  const { id: storeId } = await getStoreContext();
   const rows = await prisma.supportMessage.findMany({
     where: {
+      storeId,
       ...(filter?.status ? { status: filter.status } : {}),
       ...(filter?.kind ? { kind: filter.kind } : {}),
     },
@@ -180,14 +182,16 @@ export async function getSupportMessage(
   id: string,
 ): Promise<SupportMessageDTO | null> {
   await requireAdmin();
-  const row = await prisma.supportMessage.findUnique({ where: { id } });
+  const { id: storeId } = await getStoreContext();
+  const row = await prisma.supportMessage.findUnique({ where: { id, storeId } });
   return row ? toDTO(row) : null;
 }
 
 /** Cuenta de mensajes sin abrir, para el badge del menú del panel. */
 export async function countNewSupportMessages(): Promise<number> {
   await requireAdmin();
-  return prisma.supportMessage.count({ where: { status: "NUEVO" } });
+  const { id: storeId } = await getStoreContext();
+  return prisma.supportMessage.count({ where: { storeId, status: "NUEVO" } });
 }
 
 export async function updateSupportMessage(
@@ -195,12 +199,13 @@ export async function updateSupportMessage(
   input: { status?: SupportStatus; response?: string | null },
 ): Promise<SupportMessageDTO> {
   await requireAdmin();
-  const current = await prisma.supportMessage.findUnique({ where: { id } });
+  const store = await getStoreContext();
+  const current = await prisma.supportMessage.findUnique({ where: { id, storeId: store.id } });
   if (!current) throw new ApiError(404, "Mensaje no encontrado");
 
   const response = input.response?.trim() || null;
   const updated = await prisma.supportMessage.update({
-    where: { id },
+    where: { id, storeId: store.id },
     data: {
       ...(input.status ? { status: input.status } : {}),
       ...(input.response !== undefined
@@ -224,7 +229,7 @@ export async function updateSupportMessage(
       subject: updated.subject,
       originalMessage: updated.message,
       response,
-      appUrl: process.env.APP_URL || "http://localhost:3000",
+      appUrl: store.origin,
     });
     const { sent } = await sendEmail({ ...mail, to: updated.email });
     if (!sent) {

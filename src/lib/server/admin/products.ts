@@ -1,6 +1,8 @@
 import "server-only";
-import { prisma, getStoreContext } from "@/lib/prisma";
-import { requireAdmin } from "../auth";
+import { prisma } from "@/lib/prisma";
+import { adminStoreId, requireCategory } from "./scope";
+import { assertImageReferences } from "../storage";
+import type { LegacyTransaction } from "../store-client";
 import { ApiError } from "../api-helpers";
 import { detachVariants, removeProduct } from "../catalog-deletion";
 
@@ -111,12 +113,13 @@ function toRow(p: {
 }
 
 export async function listAdminProducts(): Promise<AdminProductRow[]> {
-  await requireAdmin();
+  const storeId = await adminStoreId();
   const rows = await prisma.product.findMany({
+    where: { storeId },
     orderBy: { createdAt: "desc" },
     include: {
-      images: { orderBy: { sortOrder: "asc" }, take: 1 },
-      variants: { select: { stock: true } },
+      images: { where: { storeId }, orderBy: { sortOrder: "asc" }, take: 1 },
+      variants: { where: { storeId }, select: { stock: true } },
     },
   });
   return rows.map(toRow);
@@ -125,14 +128,14 @@ export async function listAdminProducts(): Promise<AdminProductRow[]> {
 export async function getAdminProduct(
   id: string,
 ): Promise<AdminProductDetail | null> {
-  await requireAdmin();
+  const storeId = await adminStoreId();
   const p = await prisma.product.findUnique({
-    where: { id },
+    where: { id, storeId },
     include: {
-      specs: { orderBy: { sortOrder: "asc" } },
-      variants: { orderBy: { sortOrder: "asc" } },
+      specs: { where: { storeId }, orderBy: { sortOrder: "asc" } },
+      variants: { where: { storeId }, orderBy: { sortOrder: "asc" } },
       // La galería completa: el editor las muestra y reordena todas.
-      images: { orderBy: { sortOrder: "asc" } },
+      images: { where: { storeId }, orderBy: { sortOrder: "asc" } },
     },
   });
   if (!p) return null;
@@ -157,57 +160,30 @@ export async function getAdminProduct(
 }
 
 async function upsertExtras(
-  productId: string,
+  tx: LegacyTransaction, storeId: string, productId: string,
   input: Pick<ProductInput, "specs" | "images" | "variants">,
 ) {
   if (input.specs) {
-    await prisma.productSpec.deleteMany({ where: { productId } });
-    const clean = input.specs.filter((s) => s.key.trim() && s.value.trim());
-    if (clean.length) {
-      await prisma.productSpec.createMany({
-        data: clean.map((s, i) => ({
-          productId,
-          key: s.key.trim(),
-          value: s.value.trim(),
-          sortOrder: i,
-        })),
-      });
-    }
+    await tx.productSpec.deleteMany({ where: { storeId, productId } });
+    const clean = input.specs.filter((spec) => spec.key.trim() && spec.value.trim());
+    if (clean.length) await tx.productSpec.createMany({
+      data: clean.map((spec, sortOrder) => ({ storeId, productId, key: spec.key.trim(), value: spec.value.trim(), sortOrder })),
+    });
   }
   if (input.variants) {
-    const clean = input.variants.filter((v) => v.name.trim());
-    await prisma.$transaction(async (tx) => {
-      await detachVariants(tx, productId);
-      await tx.productVariant.deleteMany({ where: { productId } });
-      if (clean.length) {
-        await tx.productVariant.createMany({
-          data: clean.map((v, i) => ({
-            productId,
-            name: v.name.trim(),
-            colorHex: v.colorHex || null,
-            stock: v.stock,
-            sortOrder: i,
-          })),
-        });
-      }
+    await detachVariants(tx, productId);
+    await tx.productVariant.deleteMany({ where: { storeId, productId } });
+    const clean = input.variants.filter((variant) => variant.name.trim());
+    if (clean.length) await tx.productVariant.createMany({
+      data: clean.map((variant, sortOrder) => ({ storeId, productId, name: variant.name.trim(), colorHex: variant.colorHex || null, stock: variant.stock, sortOrder })),
     });
   }
   if (input.images !== undefined) {
-    // Reemplazo total: el orden que manda el panel es la verdad. `sortOrder`
-    // fija cómo se ven y la primera queda marcada como principal, que es la que
-    // sale en el catálogo, el carrito y los avisos.
-    await prisma.productImage.deleteMany({ where: { productId } });
-    const clean = input.images.map((u) => u.trim()).filter(Boolean);
-    if (clean.length) {
-      await prisma.productImage.createMany({
-        data: clean.map((url, i) => ({
-          productId,
-          url,
-          sortOrder: i,
-          isPrimary: i === 0,
-        })),
-      });
-    }
+    await tx.productImage.deleteMany({ where: { storeId, productId } });
+    const clean = input.images.map((url) => url.trim()).filter(Boolean);
+    if (clean.length) await tx.productImage.createMany({
+      data: clean.map((url, sortOrder) => ({ storeId, productId, url, sortOrder, isPrimary: sortOrder === 0 })),
+    });
   }
 }
 
@@ -231,54 +207,54 @@ function baseData(input: ProductInput) {
   };
 }
 
-export async function createProduct(input: ProductInput): Promise<AdminProductRow> {
-  await requireAdmin();
-  const dup = await prisma.product.findUnique({ where: { storeId_slug: { storeId: (await getStoreContext()).id, slug: input.slug } } });
-  if (dup) throw new ApiError(409, "Ya existe un producto con ese slug");
-  const created = await prisma.product.create({ data: baseData(input) });
-  await upsertExtras(created.id, input);
-  return toRow(created);
+function productWriteError(error: unknown): never {
+  const code = error && typeof error === "object" && "code" in error ? error.code : null;
+  if (code === "P2002") throw new ApiError(409, "Conflicto de slug, SKU o especificación del producto");
+  if (code === "P2003") throw new ApiError(404, "Una referencia del producto ya no está disponible");
+  if (code === "P2000") throw new ApiError(400, "Un valor del producto excede el tamaño permitido");
+  throw error;
 }
 
-export async function updateProduct(
-  id: string,
-  input: ProductInput,
-): Promise<AdminProductRow> {
-  await requireAdmin();
-  const dup = await prisma.product.findFirst({
-    where: { slug: input.slug, id: { not: id } },
-  });
-  if (dup) throw new ApiError(409, "Ya existe otro producto con ese slug");
-  const updated = await prisma.product
-    .update({ where: { id }, data: baseData(input) })
-    .catch(() => null);
-  if (!updated) throw new ApiError(404, "Producto no encontrado");
-  await upsertExtras(id, input);
-  return toRow(updated);
+export async function createProduct(input: ProductInput): Promise<AdminProductRow> {
+  const storeId = await adminStoreId();
+  await assertImageReferences(input.images ?? []);
+  return prisma.$transaction(async (tx) => {
+    await requireCategory(input.categorySlug, storeId, tx);
+    const dup = await tx.product.findUnique({ where: { storeId_slug: { storeId, slug: input.slug } } });
+    if (dup) throw new ApiError(409, "Ya existe un producto con ese slug");
+    const created = await tx.product.create({ data: { ...baseData(input), storeId } });
+    await upsertExtras(tx, storeId, created.id, input);
+    return toRow(created);
+  }).catch(productWriteError);
+}
+
+export async function updateProduct(id: string, input: ProductInput): Promise<AdminProductRow> {
+  const storeId = await adminStoreId();
+  return prisma.$transaction(async (tx) => {
+    if (!await tx.product.findUnique({ where: { id, storeId }, select: { id: true } })) throw new ApiError(404, "Producto no encontrado");
+    await requireCategory(input.categorySlug, storeId, tx);
+    await assertImageReferences(input.images ?? []);
+    const dup = await tx.product.findFirst({ where: { storeId, slug: input.slug, id: { not: id } } });
+    if (dup) throw new ApiError(409, "Ya existe otro producto con ese slug");
+    const updated = await tx.product.update({ where: { id, storeId }, data: baseData(input) });
+    await upsertExtras(tx, storeId, id, input);
+    return toRow(updated);
+  }).catch(productWriteError);
 }
 
 export async function deleteProduct(id: string): Promise<void> {
-  await requireAdmin();
-  await prisma.$transaction((tx) => removeProduct(tx, id)).catch(() => {
-    throw new ApiError(404, "Producto no encontrado");
+  const storeId = await adminStoreId();
+  await prisma.$transaction(async (tx) => {
+    if (!await tx.product.findUnique({ where: { id, storeId }, select: { id: true } })) throw new ApiError(404, "Producto no encontrado");
+    await removeProduct(tx, id);
   });
 }
 
-/** Toggle de oferta desde /admin/offers. */
-export async function setProductOffer(
-  id: string,
-  offer: { offerActive: boolean; offerPrice?: number | null },
-): Promise<AdminProductRow> {
-  await requireAdmin();
-  const updated = await prisma.product
-    .update({
-      where: { id },
-      data: {
-        offerActive: offer.offerActive,
-        ...(offer.offerPrice !== undefined ? { offerPrice: offer.offerPrice } : {}),
-      },
-    })
-    .catch(() => null);
-  if (!updated) throw new ApiError(404, "Producto no encontrado");
-  return toRow(updated);
+export async function setProductOffer(id: string, offer: { offerActive: boolean; offerPrice?: number | null }): Promise<AdminProductRow> {
+  const storeId = await adminStoreId();
+  if (!await prisma.product.findUnique({ where: { id, storeId }, select: { id: true } })) throw new ApiError(404, "Producto no encontrado");
+  return toRow(await prisma.product.update({
+    where: { id, storeId },
+    data: { offerActive: offer.offerActive, ...(offer.offerPrice !== undefined ? { offerPrice: offer.offerPrice } : {}) },
+  }));
 }

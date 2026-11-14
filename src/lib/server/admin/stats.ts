@@ -37,14 +37,16 @@ export async function getAdminStats(): Promise<AdminStats> {
     await Promise.all([
       prisma.order.aggregate({
         _sum: { total: true },
-        where: { status: { not: "CANCELLED" } },
+        where: { storeId, status: { not: "CANCELLED" } },
       }),
-      prisma.order.count(),
+      prisma.order.count({ where: { storeId } }),
       prisma.storeMembership.count({ where: { storeId, role: "CUSTOMER" } }),
       prisma.category.findMany({
-        include: { _count: { select: { products: true } } },
+        where: { storeId },
+        include: { _count: { select: { products: { where: { storeId } } } } },
       }),
       prisma.order.findMany({
+        where: { storeId },
         orderBy: { createdAt: "desc" },
         take: 7,
         include: { user: { select: { name: true } } },
@@ -53,17 +55,17 @@ export async function getAdminStats(): Promise<AdminStats> {
 
   const revenue = Number(revenueAgg._sum.total ?? 0);
   const validOrders = await prisma.order.count({
-    where: { status: { not: "CANCELLED" } },
+    where: { storeId, status: { not: "CANCELLED" } },
   });
   const avgOrder = validOrders > 0 ? revenue / validOrders : 0;
 
   // Ganancia: margen de los artículos vendidos con costo registrado.
   const [soldItems, productsWithoutCost] = await Promise.all([
     prisma.orderItem.findMany({
-      where: { order: { status: { not: "CANCELLED" } }, unitCost: { not: null } },
+      where: { storeId, order: { status: { not: "CANCELLED" } }, unitCost: { not: null } },
       select: { unitPrice: true, unitCost: true, qty: true },
     }),
-    prisma.product.count({ where: { status: "PUBLISHED", cost: null } }),
+    prisma.product.count({ where: { storeId, status: "PUBLISHED", cost: null } }),
   ]);
   const profit = soldItems.reduce(
     (s, i) => s + (Number(i.unitPrice) - Number(i.unitCost!)) * i.qty,
@@ -75,7 +77,7 @@ export async function getAdminStats(): Promise<AdminStats> {
   since.setDate(since.getDate() - 11);
   since.setHours(0, 0, 0, 0);
   const recentAll = await prisma.order.findMany({
-    where: { createdAt: { gte: since } },
+    where: { storeId, createdAt: { gte: since } },
     select: { createdAt: true },
   });
   const salesSeries: { label: string; value: number }[] = [];

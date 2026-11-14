@@ -1,6 +1,6 @@
 import "server-only";
-import { prisma, getStoreContext } from "@/lib/prisma";
-import { requireAdmin } from "../auth";
+import { prisma } from "@/lib/prisma";
+import { adminStoreId } from "./scope";
 import { ApiError } from "../api-helpers";
 
 export interface AdminDiscountRow {
@@ -76,41 +76,43 @@ function toData(input: DiscountInput) {
 }
 
 export async function listAdminDiscounts(): Promise<AdminDiscountRow[]> {
-  await requireAdmin();
+  const storeId = await adminStoreId();
   const rows = await prisma.discountCode.findMany({
+    where: { storeId },
     orderBy: { createdAt: "desc" },
   });
   return rows.map(toRow);
 }
 
 export async function createDiscount(input: DiscountInput): Promise<AdminDiscountRow> {
-  await requireAdmin();
+  const storeId = await adminStoreId();
   const data = toData(input);
-  const dup = await prisma.discountCode.findUnique({ where: { storeId_code: { storeId: (await getStoreContext()).id, code: data.code } } });
+  const dup = await prisma.discountCode.findUnique({ where: { storeId_code: { storeId, code: data.code } } });
   if (dup) throw new ApiError(409, "Ya existe un descuento con ese código");
-  return toRow(await prisma.discountCode.create({ data }));
+  return toRow(await prisma.discountCode.create({ data: { ...data, storeId } }));
 }
 
 export async function updateDiscount(
   id: string,
   input: DiscountInput,
 ): Promise<AdminDiscountRow> {
-  await requireAdmin();
+  const storeId = await adminStoreId();
+  if (!await prisma.discountCode.findUnique({ where: { id, storeId }, select: { id: true } })) throw new ApiError(404, "Descuento no encontrado");
   const data = toData(input);
   const dup = await prisma.discountCode.findFirst({
-    where: { code: data.code, id: { not: id } },
+    where: { storeId, code: data.code, id: { not: id } },
   });
   if (dup) throw new ApiError(409, "Ya existe otro descuento con ese código");
   const updated = await prisma.discountCode
-    .update({ where: { id }, data })
+    .update({ where: { id, storeId }, data })
     .catch(() => null);
   if (!updated) throw new ApiError(404, "Descuento no encontrado");
   return toRow(updated);
 }
 
 export async function deleteDiscount(id: string): Promise<void> {
-  await requireAdmin();
-  await prisma.discountCode.delete({ where: { id } }).catch(() => {
+  const storeId = await adminStoreId();
+  await prisma.discountCode.delete({ where: { id, storeId } }).catch(() => {
     throw new ApiError(404, "Descuento no encontrado");
   });
 }

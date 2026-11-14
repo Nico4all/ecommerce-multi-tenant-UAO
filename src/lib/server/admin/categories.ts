@@ -1,6 +1,7 @@
 import "server-only";
-import { prisma, getStoreContext } from "@/lib/prisma";
-import { requireAdmin } from "../auth";
+import { prisma } from "@/lib/prisma";
+import { adminStoreId, requireCategory } from "./scope";
+import { assertImageReferences } from "../storage";
 import { ApiError } from "../api-helpers";
 import { removeCategory } from "../catalog-deletion";
 
@@ -24,9 +25,10 @@ export interface CategoryInput {
 }
 
 export async function listAdminCategories(): Promise<AdminCategoryRow[]> {
-  await requireAdmin();
+  const storeId = await adminStoreId();
   const rows = await prisma.category.findMany({
-    include: { _count: { select: { products: true } } },
+    where: { storeId },
+    include: { _count: { select: { products: { where: { storeId } } } } },
     orderBy: { name: "asc" },
   });
   return rows.map((c) => ({
@@ -41,12 +43,14 @@ export async function listAdminCategories(): Promise<AdminCategoryRow[]> {
 }
 
 export async function createCategory(input: CategoryInput) {
-  await requireAdmin();
-  const dup = await prisma.category.findUnique({ where: { storeId_slug: { storeId: (await getStoreContext()).id, slug: input.slug } } });
+  const storeId = await adminStoreId();
+  await assertImageReferences([input.imageUrl]);
+  const dup = await prisma.category.findUnique({ where: { storeId_slug: { storeId, slug: input.slug } } });
   if (dup) throw new ApiError(409, "Ya existe una categoría con ese slug");
   return prisma.category.create({
     data: {
       ...input,
+      storeId,
       imageUrl: input.imageUrl || null,
       description: input.description ?? null,
     },
@@ -54,10 +58,12 @@ export async function createCategory(input: CategoryInput) {
 }
 
 export async function updateCategory(slug: string, input: Omit<CategoryInput, "slug">) {
-  await requireAdmin();
+  const storeId = await adminStoreId();
+  await requireCategory(slug, storeId);
+  await assertImageReferences([input.imageUrl]);
   const updated = await prisma.category
     .update({
-      where: { storeId_slug: { storeId: (await getStoreContext()).id, slug } },
+      where: { storeId_slug: { storeId, slug } },
       data: {
         ...input,
         imageUrl: input.imageUrl || null,
@@ -70,8 +76,9 @@ export async function updateCategory(slug: string, input: Omit<CategoryInput, "s
 }
 
 export async function deleteCategory(slug: string): Promise<void> {
-  await requireAdmin();
-  const count = await prisma.product.count({ where: { categorySlug: slug } });
+  const storeId = await adminStoreId();
+  await requireCategory(slug, storeId);
+  const count = await prisma.product.count({ where: { storeId, categorySlug: slug } });
   if (count > 0) {
     throw new ApiError(
       409,

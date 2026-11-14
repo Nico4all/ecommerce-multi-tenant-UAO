@@ -1,5 +1,5 @@
 import "server-only";
-import { prisma } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import { requireAdmin } from "./auth";
 import { ApiError } from "./api-helpers";
 import { formatPrice } from "@/lib/format";
@@ -218,17 +218,19 @@ export interface NotificationFeed {
 
 export async function getNotificationFeed(limit = 15): Promise<NotificationFeed> {
   await requireAdmin();
+  const { id: storeId } = await getStoreContext();
   const [rows, unread] = await Promise.all([
-    prisma.notification.findMany({ orderBy: { createdAt: "desc" }, take: limit }),
-    prisma.notification.count({ where: { readAt: null } }),
+    prisma.notification.findMany({ where: { storeId }, orderBy: { createdAt: "desc" }, take: limit }),
+    prisma.notification.count({ where: { storeId, readAt: null } }),
   ]);
   return { items: rows.map(toDTO), unread };
 }
 
 export async function markNotificationRead(id: string): Promise<void> {
   await requireAdmin();
+  const { id: storeId } = await getStoreContext();
   const updated = await prisma.notification
-    .update({ where: { id }, data: { readAt: new Date() } })
+    .update({ where: { id, storeId }, data: { readAt: new Date() } })
     .catch(() => null);
   if (!updated) throw new ApiError(404, "Aviso no encontrado");
 }
@@ -236,8 +238,9 @@ export async function markNotificationRead(id: string): Promise<void> {
 /** Devuelve cuántas quedaron marcadas, para poder confirmarlo en la UI. */
 export async function markAllNotificationsRead(): Promise<number> {
   await requireAdmin();
+  const { id: storeId } = await getStoreContext();
   const { count } = await prisma.notification.updateMany({
-    where: { readAt: null },
+    where: { storeId, readAt: null },
     data: { readAt: new Date() },
   });
   return count;

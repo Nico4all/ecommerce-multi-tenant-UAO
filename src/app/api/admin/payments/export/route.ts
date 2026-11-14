@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/server/auth";
+import { adminExportSelection } from "@/lib/server/admin/scope";
 import { listAdminPayments } from "@/lib/server/admin/orders";
 import {
   PAYMENT_METHOD_LABEL,
@@ -8,14 +8,9 @@ import { csvResponse, today } from "@/lib/server/csv";
 import { withErrorHandling } from "@/lib/server/api-helpers";
 
 /** Exporta todas las transacciones a CSV (botón "Exportar CSV" de /admin/payments). */
-export const GET = withErrorHandling(async () => {
-  try {
-    await requireAdmin();
-  } catch {
-    return new Response("No autorizado", { status: 401 });
-  }
-
-  const payments = await listAdminPayments();
+export const GET = withErrorHandling(async (request: Request) => {
+  const selection = await adminExportSelection(request, "payments");
+  const payments = await listAdminPayments(selection);
   return csvResponse(
     `pagos-${today()}.csv`,
     ["Pedido", "Cliente", "Método", "Fecha", "Estado", "Monto"],
