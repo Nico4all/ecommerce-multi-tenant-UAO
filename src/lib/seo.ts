@@ -19,3 +19,23 @@ export function seoDescription(value: string | null | undefined, fallback = SITE
 export function serializeJsonLd(value: unknown) {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
+
+/** Adaptador por request para generateMetadata; no publica ajustes de correo ni SMTP. */
+export async function getStoreSeo() {
+  const { getCommercialSettings } = await import("./server/commercial-settings");
+  const { branding, description } = await getCommercialSettings();
+  const { name, origin, locale } = branding;
+  return {
+    name, origin, locale, description: seoDescription(description, `Compra online en ${name}.`),
+    absoluteUrl: (path = "/") => new URL(path, `${origin}/`).href,
+  };
+}
+
+export async function getStoreMetadata() {
+  const site = await getStoreSeo();
+  return {
+    metadataBase: new URL(site.origin), title: site.name, applicationName: site.name,
+    description: site.description, alternates: { canonical: site.origin },
+    openGraph: { siteName: site.name, title: site.name, description: site.description, url: site.origin, locale: site.locale.replace("-", "_") },
+  };
+}

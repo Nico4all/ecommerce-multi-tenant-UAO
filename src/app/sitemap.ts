@@ -1,5 +1,6 @@
 import type { MetadataRoute } from "next";
 import { prisma, getStoreContext } from "@/lib/prisma";
+import { getStoreSeo } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +22,8 @@ const publicRoutes: Array<{
 ];
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  const { origin } = await getStoreContext();
+  const { id: storeId } = await getStoreContext();
+  const { origin } = await getStoreSeo();
   const staticEntries: MetadataRoute.Sitemap = publicRoutes.map((route) => ({
     url: new URL(route.path, origin).toString(),
     changeFrequency: route.changeFrequency,
@@ -30,9 +32,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   try {
     const [categories, products] = await Promise.all([
-      prisma.category.findMany({ select: { slug: true } }),
+      prisma.category.findMany({ where: { storeId }, select: { slug: true } }),
       prisma.product.findMany({
-        where: { status: "PUBLISHED" },
+        where: { storeId, status: "PUBLISHED" },
         select: { slug: true, updatedAt: true },
       }),
     ]);

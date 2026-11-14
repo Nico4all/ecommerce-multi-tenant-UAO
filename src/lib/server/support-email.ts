@@ -1,6 +1,7 @@
 import "server-only";
 import { EMAIL, emailShell, emailButton } from "./email-layout";
 import type { Mail } from "./email";
+import type { EmailBranding } from "./commercial-settings";
 import type { SupportKind } from "./support";
 
 /**
@@ -34,6 +35,7 @@ export function buildSupportReplyEmail(opts: {
   /** La respuesta del equipo. */
   response: string;
   appUrl: string;
+  branding?: EmailBranding;
 }): Mail {
   const { name, radicado, kind, subject, originalMessage, response, appUrl } = opts;
   const nombre = name.split(" ")[0] || name;
@@ -84,6 +86,7 @@ export function buildSupportReplyEmail(opts: {
     subject: `Respuesta a ${radicado} — ${subject}`,
     html: emailShell({
       appUrl,
+      branding: opts.branding,
       preheader: `Respondimos ${tipo} (${radicado}).`,
       content,
     }),

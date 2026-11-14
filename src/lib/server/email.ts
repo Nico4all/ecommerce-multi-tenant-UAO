@@ -1,88 +1,56 @@
 import "server-only";
 import nodemailer from "nodemailer";
-
-/**
- * Envío de correo por SMTP (nodemailer).
- *
- * Se configura en `.env` con `SMTP_HOST/PORT/USER/PASS` + `EMAIL_FROM`. Con
- * Gmail: `SMTP_USER` es tu correo y `SMTP_PASS` una "contraseña de aplicación"
- * (https://myaccount.google.com/apppasswords), NO la contraseña normal.
- *
- * Si NO está configurado (falta host o contraseña), no se envía nada: el correo
- * se vuelca a la consola para poder seguir el flujo en desarrollo —p.ej. copiar
- * el enlace de recuperación— sin depender de un servidor de correo.
- *
- * `sendEmail` nunca lanza por un fallo de envío: un correo caído no debe tumbar
- * la operación que lo dispara. Devuelve si se envió.
- */
+import { getCommercialSettings, mailbox } from "./commercial-settings";
 
 export interface Mail {
   to: string;
   subject: string;
   html: string;
-  /** Versión en texto plano (clientes sin HTML y anti-spam). */
   text: string;
-  /**
-   * A quién contesta el botón "Responder" del cliente de correo. Lo usan los
-   * avisos internos (PQR, pedidos) para poder responderle al cliente directo
-   * desde Gmail, sin copiar la dirección a mano.
-   */
   replyTo?: string;
 }
 
-const FROM =
-  process.env.EMAIL_FROM ?? "Variedades Los Primos <no-reply@variedadeslosprimos.com>";
-
-/**
- * Buzón interno del equipo: a donde llegan los avisos de PQR, contacto y
- * pedidos nuevos. Se configura con `STORE_EMAIL`; si falta, cae a `SMTP_USER`
- * (la cuenta desde la que ya se envía), y si tampoco está, no hay a dónde
- * avisar y quien llama se lo salta.
- */
-export function storeEmail(): string | null {
-  return process.env.STORE_EMAIL || process.env.SMTP_USER || null;
+/** El buzón global previo solo se usa como fallback de la tienda original. */
+export async function storeEmail(): Promise<string | null> {
+  return (await getCommercialSettings()).notificationEmail;
 }
 
-/** Transporte SMTP, o `null` si falta configuración imprescindible. */
 function transport() {
-  const host = process.env.SMTP_HOST;
-  const pass = process.env.SMTP_PASS;
-  // Sin host o sin contraseña no tiene sentido intentar: se cae a consola.
-  if (!host || !pass) return null;
-
+  const host = process.env.SMTP_HOST, user = process.env.SMTP_USER, pass = process.env.SMTP_PASS;
   const port = Number(process.env.SMTP_PORT ?? 587);
+  if (!host || !user || !pass || !Number.isInteger(port) || port < 1 || port > 65535) return null;
   return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465, // 465 = TLS implícito; 587 = STARTTLS
-    auth: { user: process.env.SMTP_USER, pass },
+    host, port, secure: port === 465, auth: { user, pass },
+    logger: false, debug: false, disableFileAccess: true, disableUrlAccess: true,
+    connectionTimeout: 5000, greetingTimeout: 5000, socketTimeout: 10000,
   });
 }
 
-export async function sendEmail(mail: Mail): Promise<{ sent: boolean }> {
-  const tx = transport();
-
-  if (!tx) {
-    console.warn(
-      `\n[email] SMTP sin configurar — correo NO enviado a ${mail.to}\n` +
-        `  Asunto: ${mail.subject}\n` +
-        `  ${mail.text.replace(/\n/g, "\n  ")}\n`,
-    );
-    return { sent: false };
-  }
-
-  try {
-    await tx.sendMail({
-      from: FROM,
-      to: mail.to,
-      ...(mail.replyTo ? { replyTo: mail.replyTo } : {}),
-      subject: mail.subject,
-      html: mail.html,
-      text: mail.text,
-    });
-    return { sent: true };
-  } catch (e) {
-    console.error("[email] fallo al enviar por SMTP:", e);
-    return { sent: false };
-  }
+/** Inyección de transporte para ensayos locales; producción conserva SMTP Nodemailer. */
+export function createEmailSender(getTransport = transport) {
+  return async (mail: Mail): Promise<{ sent: boolean }> => {
+    try {
+      const config = await getCommercialSettings(), to = mailbox(mail.to);
+      const tx = getTransport();
+      if (!to || !config.sender || !tx) {
+        console.warn("[email] correo no enviado: configuración incompleta o dirección inválida");
+        return { sent: false };
+      }
+      const replyTo = mailbox(mail.replyTo) ?? config.contactEmail;
+      await tx.sendMail({
+        from: { name: config.branding.name.replace(/[\r\n\x00]/g, " "), address: config.sender },
+        to, envelope: { from: config.sender, to: [to] },
+        ...(replyTo ? { replyTo } : {}),
+        subject: mail.subject.replace(/[\r\n\x00]/g, " "), html: mail.html, text: mail.text,
+        disableFileAccess: true, disableUrlAccess: true,
+      });
+      return { sent: true };
+    } catch {
+      // No registrar destinatarios, enlaces de recuperación, credenciales ni errores del proveedor.
+      console.warn("[email] correo no enviado: servicio no disponible");
+      return { sent: false };
+    }
+  };
 }
+
+export const sendEmail = createEmailSender();

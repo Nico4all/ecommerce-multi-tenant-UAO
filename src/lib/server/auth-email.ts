@@ -1,5 +1,6 @@
 import "server-only";
-import { EMAIL, emailShell, emailButton } from "./email-layout";
+import { EMAIL, emailShell, emailButton, emailIdentity, escapeEmailHtml } from "./email-layout";
+import type { EmailBranding } from "./commercial-settings";
 import type { Mail } from "./email";
 
 /**
@@ -16,8 +17,12 @@ export function buildPasswordResetEmail(opts: {
   link: string;
   /** Base pública, para el logo y el pie de la plantilla. */
   appUrl: string;
+  branding?: EmailBranding;
 }): Mail {
   const { nombre, link, appUrl } = opts;
+  const identity = emailIdentity(appUrl, opts.branding);
+  const target = new URL(link);
+  if (target.origin !== identity.origin || target.pathname !== "/restablecer") throw new Error("Enlace de recuperación inválido");
   const safeName = nombre.replace(/[&<>"']/g, (value) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[value]!);
 
   const content = `
@@ -49,7 +54,7 @@ export function buildPasswordResetEmail(opts: {
             Si el botón no funciona, copia y pega esta dirección en tu navegador:
           </p>
           <p style="margin:8px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;word-break:break-all;color:${EMAIL.brand}">
-            ${link}
+            ${escapeEmailHtml(link)}
           </p>
         </div>
       </td>
@@ -57,9 +62,10 @@ export function buildPasswordResetEmail(opts: {
 
   return {
     to: "", // lo completa quien llama
-    subject: "Restablece tu contraseña — Variedades Los Primos",
+    subject: `Restablece tu contraseña — ${identity.name}`,
     html: emailShell({
       appUrl,
+      branding: opts.branding,
       preheader: "Restablece la contraseña de tu cuenta (enlace válido por 1 hora).",
       content,
     }),

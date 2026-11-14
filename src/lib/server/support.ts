@@ -1,4 +1,5 @@
 import "server-only";
+import { randomInt } from "node:crypto";
 import { prisma, getStoreContext } from "@/lib/prisma";
 import { getSession, requireAdmin } from "./auth";
 import { notifySupportMessage } from "./notifications";
@@ -6,6 +7,7 @@ import { alertStoreSupportMessage } from "./store-alerts";
 import { sendEmail } from "./email";
 import { buildSupportReplyEmail } from "./support-email";
 import { ApiError } from "./api-helpers";
+import { getCommercialSettings } from "./commercial-settings";
 
 /**
  * PQR y mensajes de contacto.
@@ -58,17 +60,13 @@ function prefixFor(kind: SupportKind): string {
 }
 
 /**
- * Radicado legible y correlativo por año, p.ej. PQR-2026-000042.
- * Se cuenta lo que ya existe con ese prefijo y año; si dos mensajes entran a la
- * vez, el índice único de `radicado` hace fallar al segundo y se reintenta.
+ * Conserva prefijo/año y evita colisiones del índice global sin consultar
+ * contadores de otra tienda. Los radicados históricos siguen siendo válidos.
  */
-async function nextRadicado(kind: SupportKind): Promise<string> {
+function nextRadicado(kind: SupportKind): string {
   const prefix = prefixFor(kind);
   const year = new Date().getFullYear();
-  const used = await prisma.supportMessage.count({
-    where: { radicado: { startsWith: `${prefix}-${year}-` } },
-  });
-  return `${prefix}-${year}-${String(used + 1).padStart(6, "0")}`;
+  return `${prefix}-${year}-${String(randomInt(0, 1_000_000_000_000)).padStart(12, "0")}`;
 }
 
 export async function createSupportMessage(
@@ -76,8 +74,11 @@ export async function createSupportMessage(
 ): Promise<{ radicado: string }> {
   // Si hay sesión, el mensaje queda ligado a la cuenta; si no, es de invitado.
   const session = await getSession();
+  const { id: storeId } = await getStoreContext();
+  if (input.orderCode && !await prisma.order.findFirst({ where: { storeId, code: input.orderCode }, select: { id: true } })) throw new ApiError(404, "Pedido no encontrado");
 
   const data = {
+    storeId,
     kind: input.kind,
     name: input.name,
     email: input.email,
@@ -92,7 +93,7 @@ export async function createSupportMessage(
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
       const created = await prisma.supportMessage.create({
-        data: { ...data, radicado: await nextRadicado(input.kind) },
+        data: { ...data, radicado: nextRadicado(input.kind) },
       });
       await notifySupportMessage({
         id: created.id,
@@ -116,7 +117,7 @@ export async function createSupportMessage(
       });
       return { radicado: created.radicado };
     } catch (e) {
-      // Choque de radicado por envíos simultáneos: recalcular y reintentar.
+      // Una colisión del identificador se reintenta sin exponer otras tiendas.
       const code = (e as { code?: string }).code;
       if (code !== "P2002") throw e;
     }
@@ -222,19 +223,22 @@ export async function updateSupportMessage(
   // (no se reenvía al re-guardar lo mismo ni al actualizar solo el estado).
   // Best-effort: un fallo de correo no debe tumbar el guardado de la respuesta.
   if (response && response !== current.response) {
-    const mail = buildSupportReplyEmail({
-      name: updated.name,
-      radicado: updated.radicado,
-      kind: updated.kind as SupportKind,
-      subject: updated.subject,
-      originalMessage: updated.message,
-      response,
-      appUrl: store.origin,
-    });
-    const { sent } = await sendEmail({ ...mail, to: updated.email });
-    if (!sent) {
-      console.warn(`[support] respuesta de ${updated.radicado} no enviada por correo`);
-    }
+    try {
+      const mail = buildSupportReplyEmail({
+        name: updated.name,
+        radicado: updated.radicado,
+        kind: updated.kind as SupportKind,
+        subject: updated.subject,
+        originalMessage: updated.message,
+        response,
+        appUrl: store.origin,
+        branding: (await getCommercialSettings()).branding,
+      });
+      const { sent } = await sendEmail({ ...mail, to: updated.email });
+      if (!sent) {
+        console.warn(`[support] respuesta de ${updated.radicado} no enviada por correo`);
+      }
+    } catch { console.warn("[support] correo de respuesta no disponible"); }
   }
 
   return toDTO(updated);

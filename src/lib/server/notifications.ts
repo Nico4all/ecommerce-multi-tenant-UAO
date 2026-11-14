@@ -2,7 +2,8 @@ import "server-only";
 import { prisma, getStoreContext } from "@/lib/prisma";
 import { requireAdmin } from "./auth";
 import { ApiError } from "./api-helpers";
-import { formatPrice } from "@/lib/format";
+import { getCommercialSettings, commercialPrice } from "./commercial-settings";
+import { alertStoreLowStock } from "./store-alerts";
 import { PAYMENT_METHOD_LABEL } from "@/lib/order-status";
 
 /**
@@ -45,8 +46,10 @@ interface NotifyInput {
 /** Crea el aviso. Si falla, lo registra y sigue: nunca propaga el error. */
 async function notify(input: NotifyInput): Promise<void> {
   try {
+    const { id: storeId } = await getStoreContext();
     await prisma.notification.create({
       data: {
+        storeId,
         type: input.type,
         title: input.title,
         body: input.body ?? null,
@@ -69,16 +72,22 @@ export async function notifyOrderCreated(o: {
   method: string;
   customerName: string;
 }): Promise<void> {
-  const method = PAYMENT_METHOD_LABEL[o.method] ?? o.method;
-  await notify({
-    type: "ORDER_CREATED",
-    entityId: o.orderId,
-    href: `/admin/orders/${o.orderId}`,
-    title: `Pedido nuevo ${o.code} · ${formatPrice(o.total)}`,
-    body: o.paid
-      ? `${o.customerName} pagó con ${method}.`
-      : `${o.customerName} eligió ${method}: el pago queda pendiente de confirmar.`,
-  });
+  try {
+    const { id: storeId } = await getStoreContext();
+    const order = await prisma.order.findUnique({ where: { id: o.orderId, storeId }, include: { payments: { where: { storeId }, orderBy: { createdAt: "desc" }, take: 1 } } });
+    if (!order) return;
+    const { branding } = await getCommercialSettings();
+    const method = PAYMENT_METHOD_LABEL[order.payments[0]?.method ?? o.method] ?? o.method;
+    await notify({
+      type: "ORDER_CREATED",
+      entityId: o.orderId,
+      href: `/admin/orders/${o.orderId}`,
+      title: `Pedido nuevo ${order.code} · ${commercialPrice(Number(order.total), branding)}`,
+      body: order.payments[0]?.status === "COMPLETED"
+        ? `${order.shippingName} pagó con ${method}.`
+        : `${order.shippingName} eligió ${method}: el pago queda pendiente de confirmar.`,
+    });
+  } catch { console.warn("[notifications] aviso de pedido no disponible"); }
 }
 
 export async function notifySupportMessage(m: {
@@ -88,16 +97,21 @@ export async function notifySupportMessage(m: {
   name: string;
   subject: string;
 }): Promise<void> {
-  const esPqr = m.kind !== "CONTACTO";
-  await notify({
-    type: "SUPPORT_MESSAGE",
-    entityId: m.id,
-    href: `/admin/mensajes/${m.id}`,
-    title: esPqr
-      ? `PQR nueva ${m.radicado}`
-      : `Mensaje nuevo de ${m.name}`,
-    body: esPqr ? `${m.name}: ${m.subject}` : m.subject,
-  });
+  try {
+    const { id: storeId } = await getStoreContext();
+    const message = await prisma.supportMessage.findUnique({ where: { id: m.id, storeId } });
+    if (!message) return;
+    const esPqr = message.kind !== "CONTACTO";
+    await notify({
+      type: "SUPPORT_MESSAGE",
+      entityId: m.id,
+      href: `/admin/mensajes/${m.id}`,
+      title: esPqr
+        ? `PQR nueva ${message.radicado}`
+        : `Mensaje nuevo de ${message.name}`,
+      body: esPqr ? `${message.name}: ${message.subject}` : message.subject,
+    });
+  } catch { console.warn("[notifications] aviso de contacto no disponible"); }
 }
 
 export async function notifyReviewCreated(r: {
@@ -106,13 +120,18 @@ export async function notifyReviewCreated(r: {
   rating: number;
   userName: string;
 }): Promise<void> {
-  await notify({
-    type: "REVIEW_CREATED",
-    entityId: r.productId,
-    href: `/admin/products/${r.productId}`,
-    title: `Reseña de ${r.rating}★ en ${r.productName}`,
-    body: `${r.userName} calificó el producto.`,
-  });
+  try {
+    const { id: storeId } = await getStoreContext();
+    const product = await prisma.product.findUnique({ where: { id: r.productId, storeId }, select: { id: true, name: true } });
+    if (!product) return;
+    await notify({
+      type: "REVIEW_CREATED",
+      entityId: r.productId,
+      href: `/admin/products/${r.productId}`,
+      title: `Reseña de ${r.rating}★ en ${product.name}`,
+      body: `${r.userName} calificó el producto.`,
+    });
+  } catch { console.warn("[notifications] aviso de reseña no disponible"); }
 }
 
 /** Un aviso por entidad mientras siga sin leerse, para no repetir lo mismo. */
@@ -121,9 +140,11 @@ async function lowStockOnce(
   label: string,
   stock: number,
   href: string,
+  isVariant: boolean,
 ): Promise<void> {
+  const { id: storeId } = await getStoreContext();
   const pending = await prisma.notification.findFirst({
-    where: { type: "LOW_STOCK", entityId, readAt: null },
+    where: { storeId, type: "LOW_STOCK", entityId, readAt: null },
     select: { id: true },
   });
   if (pending) return;
@@ -138,6 +159,7 @@ async function lowStockOnce(
         ? "No quedan unidades. Repón el inventario o ocúltalo de la tienda."
         : `Quedan ${stock} unidad${stock === 1 ? "" : "es"}.`,
   });
+  await alertStoreLowStock(entityId, isVariant);
 }
 
 /**
@@ -148,6 +170,7 @@ export async function notifyLowStockAfterSale(
   lines: { productId: string; variantId: string | null }[],
 ): Promise<void> {
   try {
+    const { id: storeId } = await getStoreContext();
     const productIds = lines.filter((l) => !l.variantId).map((l) => l.productId);
     const variantIds = lines
       .map((l) => l.variantId)
@@ -155,17 +178,17 @@ export async function notifyLowStockAfterSale(
 
     if (productIds.length) {
       const rows = await prisma.product.findMany({
-        where: { id: { in: productIds }, stock: { lte: LOW_STOCK_THRESHOLD } },
+        where: { storeId, id: { in: productIds }, stock: { lte: LOW_STOCK_THRESHOLD } },
         select: { id: true, name: true, stock: true },
       });
       for (const p of rows) {
-        await lowStockOnce(p.id, p.name, p.stock, `/admin/products/${p.id}`);
+        await lowStockOnce(p.id, p.name, p.stock, `/admin/products/${p.id}`, false);
       }
     }
 
     if (variantIds.length) {
       const rows = await prisma.productVariant.findMany({
-        where: { id: { in: variantIds }, stock: { lte: LOW_STOCK_THRESHOLD } },
+        where: { storeId, id: { in: variantIds }, stock: { lte: LOW_STOCK_THRESHOLD } },
         select: {
           id: true,
           name: true,
@@ -179,6 +202,7 @@ export async function notifyLowStockAfterSale(
           `${v.product.name} · ${v.name}`,
           v.stock,
           `/admin/products/${v.product.id}`,
+          true,
         );
       }
     }

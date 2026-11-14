@@ -2,6 +2,8 @@ import "server-only";
 import { prisma, getStoreContext } from "@/lib/prisma";
 import { sendEmail } from "./email";
 import { buildOrderEmail, type OrderEmailInput } from "./order-email";
+import { getCommercialSettings } from "./commercial-settings";
+import { assertImageReferences } from "./storage";
 
 /**
  * Envío de correos de pedido, compartido por los tres disparadores:
@@ -32,9 +34,10 @@ type OrderForEmail = NonNullable<
 >;
 
 async function fetchOrderForEmail(orderId: string) {
+  const { id: storeId } = await getStoreContext();
   return prisma.order.findUnique({
-    where: { id: orderId },
-    include: orderForEmailInclude,
+    where: { id: orderId, storeId },
+    include: { ...orderForEmailInclude, items: { where: { storeId }, include: orderForEmailInclude.items.include } },
   });
 }
 
@@ -46,8 +49,24 @@ async function deliverOrderEmail(
   order: OrderForEmail,
   kind: OrderEmailInput["kind"],
   trackingUrl: string | null,
+  sender = sendEmail,
 ): Promise<Date | null> {
   const base = (await getStoreContext()).origin;
+  const { branding } = await getCommercialSettings();
+  if (order.storeId !== branding.storeId) return null;
+  const items = await Promise.all(order.items.map(async (item) => {
+    let imageUrl: string | null = null;
+    const image = item.product?.images[0]?.url;
+    if (image) {
+      try { await assertImageReferences([image]); imageUrl = new URL(image, base).href; } catch { /* Omitir referencias ajenas o inválidas. */ }
+    }
+    return { name: item.name, brand: item.brand, variantName: item.variantName, qty: item.qty, unitPrice: Number(item.unitPrice), imageUrl };
+  }));
+  let safeTracking: string | null = null;
+  try {
+    const url = trackingUrl ? new URL(trackingUrl) : null;
+    if (url && ["https:", "http:"].includes(url.protocol) && !url.username && !url.password) safeTracking = url.href;
+  } catch { /* No emitir enlaces de seguimiento inválidos. */ }
   const mail = buildOrderEmail({
     code: order.code,
     shippingName: order.shippingName,
@@ -58,30 +77,24 @@ async function deliverOrderEmail(
     country: order.country,
     total: Number(order.total),
     kind,
-    trackingUrl,
+    trackingUrl: safeTracking,
     carrier: order.carrier,
     trackingNumber: order.trackingNumber,
     appUrl: base,
-    items: order.items.map((i) => ({
-      name: i.name,
-      brand: i.brand,
-      variantName: i.variantName,
-      qty: i.qty,
-      unitPrice: Number(i.unitPrice),
-      imageUrl: i.product?.images[0] ? `${base}${i.product.images[0].url}` : null,
-    })),
+    branding, items,
   });
 
-  const { sent } = await sendEmail({ ...mail, to: order.email });
+  const { sent } = await sender({ ...mail, to: order.email });
   if (!sent) return null;
 
   const log = await prisma.emailLog.create({
     data: {
+      storeId: order.storeId,
       orderId: order.id,
       userId: order.userId,
       to: order.email,
       type: kind === "shipping" ? "SHIPPING_UPDATE" : "ORDER_CONFIRMATION",
-      includedTracking: !!trackingUrl,
+      includedTracking: !!safeTracking,
     },
   });
   return log.sentAt;
@@ -92,12 +105,14 @@ async function deliverOrderEmail(
  * no debe deshacer ni bloquear el checkout (la orden ya se creó de verdad).
  */
 export async function sendOrderConfirmationEmail(orderId: string): Promise<void> {
-  const order = await fetchOrderForEmail(orderId);
-  if (!order) return;
-  const sent = await deliverOrderEmail(order, "confirmation", null);
-  if (!sent) {
-    console.warn(`[order-email] confirmación no enviada para pedido ${order.code}`);
-  }
+  try {
+    const order = await fetchOrderForEmail(orderId);
+    if (!order) return;
+    const sent = await deliverOrderEmail(order, "confirmation", null);
+    if (!sent) {
+      console.warn(`[order-email] confirmación no enviada para pedido ${order.code}`);
+    }
+  } catch { console.warn("[order-email] confirmación no disponible"); }
 }
 
 /**
@@ -105,29 +120,36 @@ export async function sendOrderConfirmationEmail(orderId: string): Promise<void>
  * Best-effort por la misma razón: el estado ya cambió, no se revierte por esto.
  */
 export async function sendOrderShippedEmail(orderId: string): Promise<void> {
-  const order = await fetchOrderForEmail(orderId);
-  if (!order) return;
-  const sent = await deliverOrderEmail(order, "shipping", order.trackingUrl);
-  if (!sent) {
-    console.warn(`[order-email] aviso de envío no enviado para pedido ${order.code}`);
-  }
+  try {
+    const order = await fetchOrderForEmail(orderId);
+    if (!order) return;
+    const sent = await deliverOrderEmail(order, "shipping", order.trackingUrl);
+    if (!sent) {
+      console.warn(`[order-email] aviso de envío no enviado para pedido ${order.code}`);
+    }
+  } catch { console.warn("[order-email] aviso de envío no disponible"); }
 }
 
 /**
  * Envío manual desde el panel. A diferencia de los automáticos, SÍ importa que
  * el llamador sepa si falló (el admin ve un error y puede reintentar).
  */
-export async function sendOrderEmailManual(
-  orderId: string,
-  includeTracking: boolean,
-): Promise<{ to: string; sentAt: Date } | null | "not_found"> {
-  const order = await fetchOrderForEmail(orderId);
-  if (!order) return "not_found";
-  const tracking = includeTracking && !!order.trackingUrl;
-  const sentAt = await deliverOrderEmail(
-    order,
-    tracking ? "shipping" : "confirmation",
-    tracking ? order.trackingUrl : null,
-  );
-  return sentAt ? { to: order.email, sentAt } : null;
+export function createManualOrderEmailSender(sender = sendEmail) {
+  return async function sendOrderEmailManual(
+    orderId: string,
+    includeTracking: boolean,
+  ): Promise<{ to: string; sentAt: Date } | null | "not_found"> {
+    const order = await fetchOrderForEmail(orderId);
+    if (!order) return "not_found";
+    const tracking = includeTracking && !!order.trackingUrl;
+    const sentAt = await deliverOrderEmail(
+      order,
+      tracking ? "shipping" : "confirmation",
+      tracking ? order.trackingUrl : null,
+      sender,
+    );
+    return sentAt ? { to: order.email, sentAt } : null;
+  };
 }
+
+export const sendOrderEmailManual = createManualOrderEmailSender();

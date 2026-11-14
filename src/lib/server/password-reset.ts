@@ -5,6 +5,7 @@ import { hashPassword } from "./auth";
 import { sendEmail } from "./email";
 import { buildPasswordResetEmail } from "./auth-email";
 import { ApiError } from "./api-helpers";
+import { getCommercialSettings } from "./commercial-settings";
 
 const TOKEN_TTL_MS = 60 * 60 * 1000;
 const hashToken = (raw: string) => createHash("sha256").update(raw).digest("hex");
@@ -26,10 +27,13 @@ export async function requestPasswordReset(email: string, origin: string): Promi
       data: { storeId: store.id, userId: user.id, sessionVersion: current.sessionVersion, tokenHash: hashToken(raw), expiresAt: new Date(Date.now() + TOKEN_TTL_MS) },
     });
   }, { isolationLevel: "ReadCommitted" });
-  const mail = buildPasswordResetEmail({
-    nombre: user.name.split(" ")[0], link: `${store.origin}/restablecer?token=${raw}`, appUrl: store.origin,
-  });
-  await sendEmail({ ...mail, to: user.email });
+  try {
+    const mail = buildPasswordResetEmail({
+      nombre: user.name.split(" ")[0], link: `${store.origin}/restablecer?token=${raw}`, appUrl: store.origin,
+      branding: (await getCommercialSettings()).branding,
+    });
+    await sendEmail({ ...mail, to: user.email });
+  } catch { console.warn("[password-reset] correo de recuperación no disponible"); }
 }
 
 /** Reclamo condicional: un solo consumidor y revocación de todas las sesiones anteriores. */

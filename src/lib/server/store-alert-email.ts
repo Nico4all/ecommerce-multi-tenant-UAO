@@ -4,7 +4,7 @@ import type { Mail } from "./email";
 import type { SupportKind } from "./support";
 import { KIND_LABEL } from "@/lib/support-form";
 import { PAYMENT_METHOD_LABEL } from "@/lib/order-status";
-import { formatPrice } from "@/lib/format";
+import { commercialPrice, type EmailBranding } from "./commercial-settings";
 
 /**
  * Correos de aviso PARA EL EQUIPO (no para el cliente): lo que entra por
@@ -71,6 +71,7 @@ export function buildSupportAlertEmail(opts: {
   subject: string;
   message: string;
   appUrl: string;
+  branding?: EmailBranding;
 }): Mail {
   const { id, radicado, kind, name, email, subject, message, appUrl } = opts;
   const esPqr = kind !== "CONTACTO";
@@ -132,6 +133,7 @@ export function buildSupportAlertEmail(opts: {
     subject: `[${radicado}] ${tipo} — ${subject}`,
     html: emailShell({
       appUrl,
+      branding: opts.branding,
       preheader: `${name}: ${subject}`,
       content,
     }),
@@ -156,11 +158,13 @@ export function buildOrderAlertEmail(opts: {
   customerPhone?: string | null;
   city?: string | null;
   appUrl: string;
+  branding?: EmailBranding;
 }): Mail {
   const { orderId, code, total, method, paid, customerName, customerEmail, appUrl } =
     opts;
   const metodo = PAYMENT_METHOD_LABEL[method] ?? method;
   const estado = paid ? "Pagado" : "Pendiente de confirmar";
+  const formatPrice = (value: number) => commercialPrice(value, opts.branding);
 
   const rows: [string, string | null | undefined][] = [
     ["Pedido", code],
@@ -202,6 +206,7 @@ export function buildOrderAlertEmail(opts: {
     subject: `Pedido nuevo ${code} · ${formatPrice(total)}`,
     html: emailShell({
       appUrl,
+      branding: opts.branding,
       preheader: `${customerName} — ${metodo}, ${estado.toLowerCase()}.`,
       content,
     }),
@@ -209,5 +214,15 @@ export function buildOrderAlertEmail(opts: {
       `Pedido nuevo ${code}\n\n` +
       `${dataText(rows)}\n\n` +
       `Ver el pedido: ${appUrl}/admin/orders/${orderId}`,
+  };
+}
+
+export function buildLowStockAlertEmail(opts: { productId: string; label: string; stock: number; appUrl: string; branding?: EmailBranding }): Mail {
+  const title = opts.stock === 0 ? "Inventario agotado" : "Inventario bajo";
+  const link = `${opts.appUrl}/admin/products/${encodeURIComponent(opts.productId)}`;
+  return {
+    to: "", subject: `${title} — ${opts.label}`,
+    html: emailShell({ appUrl: opts.appUrl, branding: opts.branding, preheader: title, content: `<tr><td style="padding:24px;font-family:Arial,Helvetica,sans-serif"><h1>${esc(title)}</h1><p>${esc(opts.label)}: ${opts.stock} unidades.</p>${emailButton(link, "Revisar inventario")}</td></tr>` }),
+    text: `${title}\n${opts.label}: ${opts.stock} unidades.\n${link}`,
   };
 }
