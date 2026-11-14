@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { ApiError } from "./api-helpers";
 import { getSession, requireUser } from "./auth";
 import { getCart, clearCurrentCart } from "./carts";
-import { validateDiscount } from "./discounts";
+import { validateDiscount, redeemDiscount } from "./discounts";
 import { notifyOrderCreated, notifyLowStockAfterSale } from "./notifications";
 import { alertStoreOrderCreated } from "./store-alerts";
 import { sendOrderConfirmationEmail } from "./order-emails";
@@ -201,22 +201,8 @@ export async function checkout(input: CheckoutInput): Promise<CheckoutResult> {
     });
 
     if (discount) {
-      await tx.discountRedemption.create({
-        data: {
-          codeId: discount.codeId,
-          orderId: created.id,
-          userId: session.id,
-          amount: discountTotal,
-        },
-      });
-      await tx.discountCode.update({
-        where: { id: discount.codeId },
-        data: {
-          usedCount: { increment: 1 },
-          ...(discount.type === "GIFT_CARD"
-            ? { balance: { decrement: discountTotal } }
-            : {}),
-        },
+      await redeemDiscount(tx, discount, {
+        orderId: created.id, userId: session.id, amount: discountTotal,
       });
     }
 

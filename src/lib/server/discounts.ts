@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma, getStoreContext } from "@/lib/prisma";
 import { ApiError } from "./api-helpers";
+import type { LegacyTransaction } from "./store-client";
 
 export interface AppliedDiscount {
   codeId: string;
@@ -20,7 +21,8 @@ export async function validateDiscount(
   subtotal: number,
 ): Promise<AppliedDiscount> {
   const code = rawCode.trim().toUpperCase();
-  const d = await prisma.discountCode.findUnique({ where: { storeId_code: { storeId: (await getStoreContext()).id, code } } });
+  const { id: storeId } = await getStoreContext();
+  const d = await prisma.discountCode.findUnique({ where: { storeId_code: { storeId, code } } });
   if (!d) throw new ApiError(400, "El código no existe");
 
   const now = new Date();
@@ -68,4 +70,25 @@ export async function validateDiscount(
     amount,
     freeShipping,
   };
+}
+
+/** Registrar el canje dentro de la misma transacción del pedido. */
+export async function redeemDiscount(
+  tx: LegacyTransaction,
+  discount: AppliedDiscount,
+  input: { orderId: string; userId: string; amount: number },
+) {
+  const { id: storeId } = await getStoreContext();
+  const code = await tx.discountCode.findUnique({ where: { id: discount.codeId, storeId } });
+  if (!code) throw new ApiError(400, "El código no existe");
+  await tx.discountRedemption.create({
+    data: { storeId, codeId: code.id, orderId: input.orderId, userId: input.userId, amount: input.amount },
+  });
+  await tx.discountCode.update({
+    where: { id: code.id, storeId },
+    data: {
+      usedCount: { increment: 1 },
+      ...(code.type === "GIFT_CARD" ? { balance: { decrement: input.amount } } : {}),
+    },
+  });
 }
