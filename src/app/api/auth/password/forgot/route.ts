@@ -7,6 +7,7 @@ import {
 } from "@/lib/server/api-helpers";
 import { requestPasswordReset } from "@/lib/server/password-reset";
 import { rateLimit, clientIp } from "@/lib/server/rate-limit";
+import { getStoreContext } from "@/lib/prisma";
 
 const schema = z.object({
   email: z.email("Correo inválido").trim().toLowerCase(),
@@ -23,10 +24,11 @@ const WINDOW = 15 * 60 * 1000; // 15 minutos
  */
 export const POST = withErrorHandling(async (req: Request) => {
   const { email } = await parseBody(req, schema);
+  const store = await getStoreContext();
 
   // 5 por IP y 3 por correo cada 15 min. Se lanza 429 antes de crear token/enviar.
-  const byIp = rateLimit(`forgot:ip:${clientIp(req)}`, 5, WINDOW);
-  const byEmail = rateLimit(`forgot:email:${email}`, 3, WINDOW);
+  const byIp = rateLimit(`forgot:ip:${store.id}:${clientIp(req)}`, 5, WINDOW);
+  const byEmail = rateLimit(`forgot:email:${store.id}:${email}`, 3, WINDOW);
   if (!byIp.ok || !byEmail.ok) {
     throw new ApiError(
       429,
@@ -34,9 +36,7 @@ export const POST = withErrorHandling(async (req: Request) => {
     );
   }
 
-  // Base pública configurable: detrás de un dominio/proxy el origin de la
-  // petición puede ser un host interno, así que APP_URL manda si está puesto.
-  const origin = process.env.APP_URL || new URL(req.url).origin;
+  const origin = store.origin;
   await requestPasswordReset(email, origin);
 
   return jsonOk({

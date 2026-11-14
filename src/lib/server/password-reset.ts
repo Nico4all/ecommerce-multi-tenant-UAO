@@ -1,91 +1,60 @@
 import "server-only";
 import { randomBytes, createHash } from "node:crypto";
-import { prisma } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import { hashPassword } from "./auth";
 import { sendEmail } from "./email";
 import { buildPasswordResetEmail } from "./auth-email";
 import { ApiError } from "./api-helpers";
 
-/**
- * Recuperación de contraseña por enlace (self-service).
- *
- * Flujo: el usuario pide un enlace con su correo -> se le envía uno con un token
- * de un solo uso que caduca en 1 hora -> abre el enlace y fija una contraseña
- * nueva. El token viaja en la URL en claro, pero en la BD solo guardamos su
- * hash: filtrar la tabla no basta para secuestrar una cuenta.
- */
+const TOKEN_TTL_MS = 60 * 60 * 1000;
+const hashToken = (raw: string) => createHash("sha256").update(raw).digest("hex");
 
-const TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hora
-
-/** sha-256 en hex del token. Determinista: permite buscar por hash. */
-function hashToken(raw: string): string {
-  return createHash("sha256").update(raw).digest("hex");
-}
-
-/**
- * Crea un token de recuperación para `email` y envía el correo.
- *
- * No revela si el correo existe: responde igual haya o no cuenta (evita que
- * alguien sondee qué correos están registrados). Por eso no lanza ApiError.
- */
-export async function requestPasswordReset(
-  email: string,
-  origin: string,
-): Promise<void> {
-  const user = await prisma.user.findUnique({
-    where: { email: email.trim().toLowerCase() },
+/** Respuesta uniforme; el enlace solo procede del origen validado de esta tienda. */
+export async function requestPasswordReset(email: string, origin: string): Promise<void> {
+  const store = await getStoreContext();
+  if (origin !== store.origin) throw new ApiError(400, "Origen de recuperación inválido");
+  const user = await prisma.user.findFirst({
+    where: { email: email.trim().toLowerCase(), status: "ACTIVE", memberships: { some: { storeId: store.id, active: true } } },
   });
-  if (!user) return; // silencio deliberado
-
-  // Un token vigente por usuario: se invalidan los anteriores al pedir uno nuevo.
-  await prisma.passwordResetToken.deleteMany({ where: { userId: user.id } });
-
+  if (!user) return;
   const raw = randomBytes(32).toString("hex");
-  await prisma.passwordResetToken.create({
-    data: {
-      userId: user.id,
-      tokenHash: hashToken(raw),
-      expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
-    },
-  });
-
-  const link = `${origin}/restablecer?token=${raw}`;
+  await prisma.$transaction(async (tx) => {
+    await tx.user.update({ where: { id: user.id, status: "ACTIVE" }, data: { updatedAt: new Date() } });
+    const current = await tx.user.findUniqueOrThrow({ where: { id: user.id } });
+    await tx.passwordResetToken.deleteMany({ where: { storeId: store.id, userId: user.id } });
+    await tx.passwordResetToken.create({
+      data: { storeId: store.id, userId: user.id, sessionVersion: current.sessionVersion, tokenHash: hashToken(raw), expiresAt: new Date(Date.now() + TOKEN_TTL_MS) },
+    });
+  }, { isolationLevel: "ReadCommitted" });
   const mail = buildPasswordResetEmail({
-    nombre: user.name.split(" ")[0],
-    link,
-    appUrl: origin,
+    nombre: user.name.split(" ")[0], link: `${store.origin}/restablecer?token=${raw}`, appUrl: store.origin,
   });
   await sendEmail({ ...mail, to: user.email });
 }
 
-/**
- * Consume un token y fija la nueva contraseña. Lanza 400 si el enlace es
- * inválido, ya se usó o caducó.
- */
-export async function resetPassword(
-  rawToken: string,
-  newPassword: string,
-): Promise<void> {
-  const token = await prisma.passwordResetToken.findUnique({
-    where: { tokenHash: hashToken(rawToken) },
-  });
-
-  if (!token || token.usedAt || token.expiresAt < new Date()) {
-    throw new ApiError(
-      400,
-      "El enlace no es válido o ya venció. Solicita uno nuevo.",
-    );
-  }
-
-  // Marca el token usado y cambia la contraseña en una sola transacción.
-  await prisma.$transaction([
-    prisma.user.update({
-      where: { id: token.userId },
-      data: { passwordHash: await hashPassword(newPassword) },
-    }),
-    prisma.passwordResetToken.update({
-      where: { id: token.id },
+/** Reclamo condicional: un solo consumidor y revocación de todas las sesiones anteriores. */
+export async function resetPassword(rawToken: string, newPassword: string): Promise<void> {
+  const { id: storeId } = await getStoreContext();
+  const invalid = () => new ApiError(400, "El enlace no es válido o ya venció. Solicita uno nuevo.");
+  const tokenHash = hashToken(rawToken);
+  const found = await prisma.passwordResetToken.findUnique({ where: { tokenHash, storeId } });
+  if (!found) throw invalid();
+  const passwordHash = await hashPassword(newPassword);
+  await prisma.$transaction(async (tx) => {
+    const locked = await tx.user.updateMany({
+      where: { id: found.userId, status: "ACTIVE", sessionVersion: found.sessionVersion },
+      data: { sessionVersion: { increment: 0 } },
+    });
+    if (!locked.count) throw invalid();
+    const member = await tx.storeMembership.findUnique({ where: { storeId_userId: { storeId, userId: found.userId }, active: true } });
+    if (!member) throw invalid();
+    const claimed = await tx.passwordResetToken.updateMany({
+      where: { id: found.id, storeId, userId: found.userId, usedAt: null, expiresAt: { gt: new Date() }, sessionVersion: found.sessionVersion },
       data: { usedAt: new Date() },
-    }),
-  ]);
+    });
+    if (claimed.count !== 1) throw invalid();
+    await tx.user.update({
+      where: { id: found.userId }, data: { passwordHash, sessionVersion: { increment: 1 } },
+    });
+  }, { isolationLevel: "ReadCommitted" });
 }

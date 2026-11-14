@@ -1,7 +1,8 @@
 import "server-only";
-import { prisma } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import { requireAdmin, hashPassword } from "../auth";
 import { ApiError } from "../api-helpers";
+import { publicStoreRole } from "../memberships";
 
 export interface AdminUserRow {
   id: string;
@@ -56,6 +57,7 @@ export interface UserInput {
 const userInclude = {
   addresses: { where: { isDefault: true }, take: 1 },
   orders: { select: { total: true, status: true } },
+  memberships: { select: { role: true, active: true } },
 };
 
 type UserWithExtras = {
@@ -68,6 +70,7 @@ type UserWithExtras = {
   createdAt: Date;
   addresses: { street: string; city: string; state: string; zip: string; country: string }[];
   orders: { total: unknown; status: string }[];
+  memberships: { role: string; active: boolean }[];
 };
 
 function toRow(u: UserWithExtras): AdminUserRow {
@@ -83,17 +86,19 @@ function toRow(u: UserWithExtras): AdminUserRow {
     totalSpent: u.orders
       .filter((o) => o.status !== "CANCELLED")
       .reduce((s, o) => s + Number(o.total), 0),
-    status: u.status as "ACTIVE" | "INACTIVE",
+    status: u.status === "ACTIVE" && u.memberships[0]?.active ? "ACTIVE" : "INACTIVE",
     joinedAt: u.createdAt.toISOString().slice(0, 10),
-    role: u.role as "ADMIN" | "CUSTOMER",
+    role: publicStoreRole(u.memberships[0]?.role ?? "CUSTOMER"),
   };
 }
 
 export async function listAdminUsers(): Promise<AdminUserRow[]> {
   await requireAdmin();
+  const { id: storeId } = await getStoreContext();
   // Incluye admins y clientes: el panel gestiona ambos (crear admins, resetear
   // contraseñas). El rol viaja en cada fila para distinguirlos en la tabla.
   const rows = await prisma.user.findMany({
+    where: { memberships: { some: { storeId } } },
     include: userInclude,
     orderBy: [{ role: "asc" }, { createdAt: "desc" }],
   });
@@ -102,8 +107,9 @@ export async function listAdminUsers(): Promise<AdminUserRow[]> {
 
 export async function getAdminUser(id: string): Promise<AdminUserDetail | null> {
   await requireAdmin();
+  const { id: storeId } = await getStoreContext();
   const u = await prisma.user.findUnique({
-    where: { id },
+    where: { id, memberships: { some: { storeId } } },
     include: {
       ...userInclude,
       orders: undefined,
@@ -145,78 +151,62 @@ export async function getAdminUser(id: string): Promise<AdminUserDetail | null> 
 
 export async function createAdminUser(input: UserInput): Promise<AdminUserRow> {
   await requireAdmin();
-  const dup = await prisma.user.findUnique({
-    where: { email: input.email.toLowerCase() },
+  const { id: storeId } = await getStoreContext();
+  const email = input.email.trim().toLowerCase();
+  if (await prisma.user.findUnique({ where: { email } })) throw new ApiError(409, "Ya existe una identidad con ese correo");
+  const passwordHash = input.password ? await hashPassword(input.password) : null;
+  return prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
+      data: {
+        name: input.name, email, phone: input.phone ?? null, role: "CUSTOMER", passwordHash,
+        ...(input.address ? { addresses: { create: { ...input.address, isDefault: true } } } : {}),
+      },
+    });
+    await tx.storeMembership.create({
+      data: { storeId, userId: user.id, role: input.role ?? "CUSTOMER", active: input.status !== "INACTIVE" },
+    });
+    return toRow(await tx.user.findUniqueOrThrow({ where: { id: user.id }, include: userInclude }));
   });
-  if (dup) throw new ApiError(409, "Ya existe un usuario con ese correo");
-
-  const created = await prisma.user.create({
-    data: {
-      name: input.name,
-      email: input.email.toLowerCase(),
-      phone: input.phone ?? null,
-      role: input.role ?? "CUSTOMER",
-      status: input.status ?? "ACTIVE",
-      // Con contraseña => la cuenta ya puede entrar (así se crea un admin y se le
-      // pasan las credenciales). Sin ella => invitación: la fija al registrarse.
-      passwordHash: input.password ? await hashPassword(input.password) : null,
-      ...(input.address
-        ? { addresses: { create: { ...input.address, isDefault: true } } }
-        : {}),
-    },
-    include: userInclude,
-  });
-  return toRow(created);
 }
 
-/** Fija (resetea) la contraseña de un usuario desde el panel. */
+/** La contraseña global solo se cambia con reautenticación propia o recuperación. */
 export async function setUserPassword(id: string, password: string): Promise<void> {
   await requireAdmin();
-  const user = await prisma.user.findUnique({ where: { id } });
-  if (!user) throw new ApiError(404, "Usuario no encontrado");
-  await prisma.user.update({
-    where: { id },
-    data: { passwordHash: await hashPassword(password) },
-  });
+  const { id: storeId } = await getStoreContext();
+  const member = await prisma.storeMembership.findUnique({ where: { storeId_userId: { storeId, userId: id } } });
+  if (!member) throw new ApiError(404, "Usuario no encontrado");
+  void password;
+  throw new ApiError(403, "Usa el cambio propio o la recuperación de contraseña de la identidad global");
 }
 
-export async function updateAdminUser(
-  id: string,
-  input: UserInput,
-): Promise<AdminUserRow> {
+export async function updateAdminUser(id: string, input: UserInput): Promise<AdminUserRow> {
   await requireAdmin();
-  const existing = await prisma.user.findUnique({ where: { id } });
-  if (!existing) throw new ApiError(404, "Usuario no encontrado");
-
-  const dup = await prisma.user.findFirst({
-    where: { email: input.email.toLowerCase(), id: { not: id } },
+  const { id: storeId } = await getStoreContext();
+  const user = await prisma.user.findUnique({
+    where: { id, memberships: { some: { storeId } } }, include: userInclude,
   });
-  if (dup) throw new ApiError(409, "Ya existe otro usuario con ese correo");
-
-  const updated = await prisma.user.update({
-    where: { id },
-    data: {
-      name: input.name,
-      email: input.email.toLowerCase(),
-      phone: input.phone ?? null,
-      status: input.status ?? "ACTIVE",
-    },
-    include: userInclude,
-  });
-
-  if (input.address) {
-    await prisma.address.deleteMany({ where: { userId: id, isDefault: true } });
-    await prisma.address.create({
-      data: { userId: id, ...input.address, isDefault: true },
-    });
+  if (!user) throw new ApiError(404, "Usuario no encontrado");
+  const address = user.addresses[0];
+  const changedAddress = input.address && Object.entries(input.address).some(([key, value]) => address?.[key as keyof typeof address] !== value);
+  if (input.name !== user.name || input.email.trim().toLowerCase() !== user.email.toLowerCase() ||
+    (input.phone ?? "") !== (user.phone ?? "") || changedAddress || input.password) {
+    throw new ApiError(403, "El perfil y las credenciales globales solo los modifica su titular");
   }
-
-  return toRow(updated);
+  const member = user.memberships[0];
+  if (member.role === "OWNER" && (input.status === "INACTIVE" || input.role === "CUSTOMER")) throw new ApiError(403, "No se puede retirar al propietario desde este formulario");
+  await prisma.storeMembership.update({
+    where: { storeId_userId: { storeId, userId: id } },
+    data: { ...(input.status ? { active: input.status === "ACTIVE" } : {}), ...(input.role && member.role !== "OWNER" ? { role: input.role } : {}) },
+  });
+  return toRow(await prisma.user.findUniqueOrThrow({ where: { id }, include: userInclude }));
 }
 
+/** Retirar acceso a esta tienda conserva identidad, pedidos y membresías de las demás. */
 export async function deleteAdminUser(id: string): Promise<void> {
   await requireAdmin();
-  await prisma.user.delete({ where: { id } }).catch(() => {
-    throw new ApiError(404, "Usuario no encontrado");
-  });
+  const { id: storeId } = await getStoreContext();
+  const member = await prisma.storeMembership.findUnique({ where: { storeId_userId: { storeId, userId: id } } });
+  if (!member) throw new ApiError(404, "Usuario no encontrado");
+  if (member.role === "OWNER") throw new ApiError(403, "No se puede retirar al propietario desde este formulario");
+  await prisma.storeMembership.delete({ where: { storeId_userId: { storeId, userId: id } } });
 }

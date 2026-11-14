@@ -8,9 +8,10 @@ const commercialModels = new Set([
   "Review", "Cart", "CartItem", "WishlistItem", "Order", "OrderItem",
   "OrderStatusEvent", "Payment", "DiscountCode", "DiscountRedemption",
   "Banner", "HomeSection", "EmailLog", "Notification", "SupportMessage",
+  "PasswordResetToken", "OAuthAttempt",
 ]);
 
-const userCommerce = ["orders", "reviews", "wishlist", "carts", "redemptions", "emails", "support", "memberships"];
+const userCommerce = ["orders", "reviews", "wishlist", "carts", "redemptions", "emails", "support", "memberships", "resetTokens", "oauthAttempts"];
 
 function scopeUserReads(args: Record<string, unknown>, storeId: string) {
   for (const key of ["data", "create", "update"]) {
@@ -33,7 +34,7 @@ function scopeUserReads(args: Record<string, unknown>, storeId: string) {
     restrict(selection);
     if (selection._count) {
       if (selection._count === true) {
-        selection._count = { select: Object.fromEntries(["addresses", "resetTokens", ...userCommerce].map((name) => [name, true])) };
+        selection._count = { select: Object.fromEntries(["addresses", ...userCommerce].map((name) => [name, true])) };
       }
       const count = selection._count as { select?: Record<string, unknown> };
       if (count.select) restrict(count.select);

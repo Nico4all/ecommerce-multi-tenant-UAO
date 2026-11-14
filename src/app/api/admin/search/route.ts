@@ -1,6 +1,6 @@
 import { withErrorHandling, jsonOk } from "@/lib/server/api-helpers";
 import { requireAdmin } from "@/lib/server/auth";
-import { prisma } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 
 /**
  * Búsqueda global del panel (barra del header). Devuelve pocas coincidencias de
@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
  */
 export const GET = withErrorHandling(async (req: Request) => {
   await requireAdmin();
+  const { id: storeId } = await getStoreContext();
   const q = new URL(req.url).searchParams.get("q")?.trim() ?? "";
   if (q.length < 2) return jsonOk({ products: [], orders: [], users: [] });
 
@@ -27,7 +28,7 @@ export const GET = withErrorHandling(async (req: Request) => {
       select: { id: true, code: true, shippingName: true },
     }),
     prisma.user.findMany({
-      where: { OR: [{ name: like }, { email: like }] },
+      where: { memberships: { some: { storeId } }, OR: [{ name: like }, { email: like }] },
       take: 5,
       select: { id: true, name: true, email: true },
     }),

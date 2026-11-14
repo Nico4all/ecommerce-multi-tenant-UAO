@@ -1,5 +1,5 @@
 import "server-only";
-import { prisma } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import { requireAdmin } from "../auth";
 
 export interface AdminStats {
@@ -31,6 +31,7 @@ export interface AdminStats {
 
 export async function getAdminStats(): Promise<AdminStats> {
   await requireAdmin();
+  const { id: storeId } = await getStoreContext();
 
   const [revenueAgg, ordersCount, customersCount, categories, recent] =
     await Promise.all([
@@ -39,7 +40,7 @@ export async function getAdminStats(): Promise<AdminStats> {
         where: { status: { not: "CANCELLED" } },
       }),
       prisma.order.count(),
-      prisma.user.count({ where: { role: "CUSTOMER" } }),
+      prisma.storeMembership.count({ where: { storeId, role: "CUSTOMER" } }),
       prisma.category.findMany({
         include: { _count: { select: { products: true } } },
       }),

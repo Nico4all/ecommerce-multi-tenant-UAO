@@ -18,6 +18,7 @@ export function buildPasswordResetEmail(opts: {
   appUrl: string;
 }): Mail {
   const { nombre, link, appUrl } = opts;
+  const safeName = nombre.replace(/[&<>"']/g, (value) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[value]!);
 
   const content = `
     <tr>
@@ -30,7 +31,7 @@ export function buildPasswordResetEmail(opts: {
     <tr>
       <td style="padding:14px 32px 0;text-align:center">
         <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.6;color:${EMAIL.muted}">
-          Hola ${nombre}, recibimos una solicitud para restablecer la contraseña
+          Hola ${safeName}, recibimos una solicitud para restablecer la contraseña
           de tu cuenta. Toca el botón para elegir una nueva.
         </p>
         <div style="height:22px;line-height:22px">&nbsp;</div>

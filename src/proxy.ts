@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { jwtVerify } from "jose";
+import { getSessionFromToken } from "@/lib/server/auth";
+import { runWithStoreContext } from "@/lib/server/store-context";
 import { storeIngress, privateStoreHeaders } from "@/lib/server/store-ingress";
 
 /**
@@ -9,21 +10,6 @@ import { storeIngress, privateStoreHeaders } from "@/lib/server/store-ingress";
  */
 
 const SESSION_COOKIE = "vlp_session";
-
-async function getRole(req: NextRequest): Promise<string | null> {
-  const token = req.cookies.get(SESSION_COOKIE)?.value;
-  const secret = process.env.SESSION_SECRET;
-  if (!token || !secret) return null;
-  try {
-    const { payload } = await jwtVerify(
-      token,
-      new TextEncoder().encode(secret),
-    );
-    return typeof payload.role === "string" ? payload.role : null;
-  } catch {
-    return null;
-  }
-}
 
 export async function proxy(req: NextRequest) {
   const ingress = await storeIngress(req);
@@ -37,7 +23,13 @@ export async function proxy(req: NextRequest) {
   if (pathname !== "/admin" && !pathname.startsWith("/admin/") && pathname !== "/api/admin" && !pathname.startsWith("/api/admin/")) {
     return privateResponse(NextResponse.next());
   }
-  const role = await getRole(req);
+  let role: string | null;
+  try {
+    role = await runWithStoreContext(ingress.context, async () =>
+      (await getSessionFromToken(req.cookies.get(SESSION_COOKIE)?.value))?.role ?? null);
+  } catch {
+    return privateResponse(NextResponse.json({ ok: false, error: "No se pudo validar el acceso" }, { status: 503 }));
+  }
 
   if (!role) {
     if (isApi) {
