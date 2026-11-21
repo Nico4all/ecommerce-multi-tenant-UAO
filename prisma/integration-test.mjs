@@ -13,6 +13,7 @@ assert.notEqual(process.env.NODE_ENV,'production');
 const db=await mariadb.createConnection({host:url.hostname,port:Number(url.port||3306),user:decodeURIComponent(url.username),password:decodeURIComponent(url.password),database:url.pathname.slice(1),decimalAsNumber:true,bigIntAsNumber:true});
 const hosts=['losprimos.localhost:3100','fruvalle.localhost:3100'];
 const names=['Variedades Los Primos','Frutas del Valle'];
+const adminEmails=['admin@variedades.com','admin@fruvalle.com'];
 const products=['demo-0-termo','demo-1-aguacate'];
 const run=randomUUID().slice(0,8),cookies=[],codes=[];
 let checks=0,approvedCode;
@@ -35,7 +36,7 @@ try{
   await api('unknown.invalid','/api/products',404);await api('unknown.invalid','/login',404);
  });
  await check('login con contraseña, roles de membresía y Google inactivo',async()=>{
-  for(const i of [0,1]){const r=await api(i,'/api/auth/login',200,post({email:`e08-admin-${i?'b':'a'}@variedadeslosprimos.com`,password:'admin123'}));assert.equal(r.data.role,'ADMIN');const cookie=r.headers['set-cookie'].map(x=>x.split(';')[0]).find(x=>x.startsWith('vlp_session='));assert(cookie);cookies.push(cookie);await api(i,'/api/admin/products',200,{cookie});await api(1-i,'/api/admin/products',403,{cookie});await api(i,'/api/auth/google',503);}
+  for(const i of [0,1]){const r=await api(i,'/api/auth/login',200,post({email:adminEmails[i],password:'admin123'}));assert.equal(r.data.role,'ADMIN');const cookie=r.headers['set-cookie'].map(x=>x.split(';')[0]).find(x=>x.startsWith('vlp_session='));assert(cookie);cookies.push(cookie);await api(i,'/api/admin/products',200,{cookie});await api(1-i,'/api/admin/products',403,{cookie});await api(i,'/api/auth/google',503);}
  });
  await check('carrito y favoritos separados con el mismo usuario; IDs ajenos rechazados',async()=>{
   for(const i of [0,1]){await add(i,cookies[0]);const before=await api(i,'/api/cart',200,{cookie:cookies[0]});assert(before.data.lines.every(l=>l.product.id===products[i]));const foreign=await request(i,'/api/cart/items',post({productId:products[1-i],variantId:products[1-i]+'-variant',qty:1},cookies[0]));assert([400,404].includes(foreign.status));assert.equal((await api(i,'/api/cart',200,{cookie:cookies[0]})).text,before.text);await api(i,'/api/wishlist',200,post({productId:products[i]},cookies[0]));const wish=await api(i,'/api/wishlist',200,{cookie:cookies[0]});assert(!wish.text.includes(products[1-i]));const bad=await request(i,'/api/wishlist',post({productId:products[1-i]},cookies[0]));assert([400,404].includes(bad.status));}
@@ -79,9 +80,9 @@ try{
   });
  }
  await check('recuperación y notificaciones SMTP capturadas por tienda',async()=>{
-  for(const i of [0,1])await api(i,'/api/auth/password/forgot',200,post({email:`e08-admin-${i?'b':'a'}@variedadeslosprimos.com`}));
+  for(const i of [0,1])await api(i,'/api/auth/password/forgot',200,post({email:adminEmails[i]}));
   const inbox=await (await fetch('http://mailpit:8025/api/v1/messages')).json();assert(inbox.messages.length>=4);
-  for(const i of [0,1]){const item=inbox.messages.find(m=>m.Subject.includes('contraseña')&&m.Subject.includes(names[i]));assert(item,'Correo de recuperación '+names[i]);const mail=await (await fetch('http://mailpit:8025/api/v1/message/'+item.ID)).json();assert(!mail.HTML.includes(names[1-i]));assert(mail.HTML.includes(hosts[i]));assert.equal(mail.To[0].Address,`e08-admin-${i?'b':'a'}@variedadeslosprimos.com`);const token=mail.HTML.match(/token=([a-f0-9]{64})/)?.[1];assert(token);await api(1-i,'/api/auth/password/reset',400,post({token,password:'admin123'}));await api(i,'/api/auth/password/reset',200,post({token,password:'admin123'}));await api(i,'/api/auth/password/reset',400,post({token,password:'admin123'}));await api(i,'/api/auth/login',200,post({email:`e08-admin-${i?'b':'a'}@variedadeslosprimos.com`,password:'admin123'}));}
+  for(const i of [0,1]){const item=inbox.messages.find(m=>m.Subject.includes('contraseña')&&m.Subject.includes(names[i]));assert(item,'Correo de recuperación '+names[i]);const mail=await (await fetch('http://mailpit:8025/api/v1/message/'+item.ID)).json();assert(!mail.HTML.includes(names[1-i]));assert(mail.HTML.includes(hosts[i]));assert.equal(mail.To[0].Address,adminEmails[i]);const token=mail.HTML.match(/token=([a-f0-9]{64})/)?.[1];assert(token);await api(1-i,'/api/auth/password/reset',400,post({token,password:'admin123'}));await api(i,'/api/auth/password/reset',200,post({token,password:'admin123'}));await api(i,'/api/auth/password/reset',400,post({token,password:'admin123'}));await api(i,'/api/auth/login',200,post({email:adminEmails[i],password:'admin123'}));}
   const confirmation=inbox.messages.find(m=>m.Subject.startsWith('Recibimos tu pedido')&&m.Subject.includes(approvedCode??codes[0]));assert(confirmation,'Confirmación de pedido capturada');const mail=await(await fetch('http://mailpit:8025/api/v1/message/'+confirmation.ID)).json();assert(mail.HTML.includes('http://'+hosts[0]));assert(!mail.HTML.includes(names[1]));
  });
  console.log(`Integración: ${checks} grupos correctos. Datos únicamente en multitienda_demo; SMTP local; Google inactivo.`);

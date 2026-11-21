@@ -2,10 +2,10 @@ import "dotenv/config";
 import { createHash } from "node:crypto";
 import { copyFile, mkdir } from "node:fs/promises";
 import path from "node:path";
-import bcrypt from "bcryptjs";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { initialStores } from "./stores";
+import { demoStoreAdmins, provisionDemoAccounts } from "./demo-accounts";
 
 const url = new URL(process.env.DATABASE_URL ?? "");
 if (!process.argv.includes("--local-demo") || process.env.NODE_ENV === "production" ||
@@ -15,10 +15,9 @@ if (!process.argv.includes("--local-demo") || process.env.NODE_ENV === "producti
 }
 const prisma = new PrismaClient({ adapter: new PrismaMariaDb(url.href) });
 async function main() {
-const passwordHash = await bcrypt.hash("admin123", 10);
 const data = [
   {
-    ...initialStores[0], hostname: "losprimos.localhost", admin: "e08-admin-a@variedadeslosprimos.com",
+    ...initialStores[0], hostname: "losprimos.localhost", admin: demoStoreAdmins[0].email,
     tagline: "Pequeños detalles. Grandes días.", description: "Diseño práctico para disfrutar tu casa: cocina, organización y objetos que acompañan tu día a día.",
     categories: ["vida-diaria", "cocina", "organizacion"], categoryNames: ["Vida diaria", "Cocina y mesa", "Organización"],
     products: [
@@ -28,7 +27,7 @@ const data = [
     ],
   },
   {
-    ...initialStores[1], hostname: "fruvalle.localhost", admin: "e08-admin-b@variedadeslosprimos.com",
+    ...initialStores[1], hostname: "fruvalle.localhost", admin: demoStoreAdmins[1].email,
     tagline: "Del campo a tus mejores momentos.", description: "Frutas frescas, canastas para compartir y sabores de temporada. Elige tu selección favorita y disfruta la frescura del Valle.",
     categories: ["frutas", "temporada", "canastas"], categoryNames: ["Fruta fresca", "De temporada", "Canastas"],
     products: [
@@ -58,8 +57,6 @@ try {
       const existingDomain = await tx.storeDomain.findUnique({ where: { hostname: store.hostname } });
       if (existingDomain && existingDomain.storeId !== store.id) throw new Error("El alias de muestra pertenece a otra tienda");
       await tx.storeDomain.upsert({ where: { hostname: store.hostname }, create: { storeId: store.id, hostname: store.hostname, verifiedAt: new Date() }, update: { verifiedAt: new Date() } });
-      const admin = await tx.user.upsert({ where: { email: store.admin }, create: { id: `demo-admin-${index}`, email: store.admin, name: `Administrador ${store.name}`, passwordHash, termsAcceptedAt: new Date() }, update: {} });
-      await tx.storeMembership.upsert({ where: { storeId_userId: { storeId: store.id, userId: admin.id } }, create: { storeId: store.id, userId: admin.id, role: index ? "OWNER" : "ADMIN" }, update: { active: true } });
       for (const [position, slug] of store.categories.entries()) {
         const product = store.products[position];
         const category = { name: store.categoryNames[position], icon: index ? "shopping-basket" : "sofa", gradient: "from-primary/10 to-primary/5 text-primary", imageUrl: `/api/uploads/${prefix}/${product.asset}.png`, description: `${store.categoryNames[position]}: una selección de ${store.name}.` };
@@ -88,6 +85,7 @@ try {
       await tx.discountCode.upsert({ where: { storeId_code: { storeId: store.id, code: "BIENVENIDA" } }, create: { storeId: store.id, code: "BIENVENIDA", type: "PERCENT", value: 10 }, update: {} });
     }, { timeout: 30000 });
   }
+  await provisionDemoAccounts(prisma);
   const admins = await prisma.user.findMany({ where: { email: { in: data.map((store) => store.admin) } } });
   for (const admin of admins) for (const store of data) {
     if (admin.email !== store.admin) await prisma.storeMembership.upsert({ where: { storeId_userId: { storeId: store.id, userId: admin.id } }, create: { storeId: store.id, userId: admin.id, role: "CUSTOMER" }, update: {} });

@@ -32,14 +32,15 @@ async function storeIdentity(userId: string) {
     include: { memberships: { where: { storeId, active: true }, take: 1 } },
   });
   const membership = user?.memberships[0];
-  if (!user || user.status !== "ACTIVE" || !membership) return null;
+  const platformAdmin = user?.platformRole === "ADMIN";
+  if (!user || user.status !== "ACTIVE" || (!platformAdmin && !membership)) return null;
   return {
-    user: { id: user.id, name: user.name, email: user.email, role: publicStoreRole(membership.role) },
+    user: { id: user.id, name: user.name, email: user.email, role: platformAdmin ? "ADMIN" as const : publicStoreRole(membership?.role ?? "CUSTOMER") },
     version: user.sessionVersion,
   };
 }
 
-/** El DTO conserva role; su valor siempre procede de la membresía de esta tienda. */
+/** Conserva el DTO; solo un permiso explícito de plataforma amplía la membresía. */
 export async function createSession(identity: Pick<SessionUser, "id"> & Partial<Omit<SessionUser, "id">>): Promise<SessionUser> {
   const current = await storeIdentity(identity.id);
   if (!current) throw new ApiError(403, "No tienes acceso activo a esta tienda");

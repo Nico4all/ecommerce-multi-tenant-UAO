@@ -66,6 +66,7 @@ type UserWithExtras = {
   email: string;
   phone: string | null;
   role: string;
+  platformRole: string;
   status: string;
   createdAt: Date;
   addresses: { street: string; city: string; state: string; zip: string; country: string }[];
@@ -86,9 +87,9 @@ function toRow(u: UserWithExtras): AdminUserRow {
     totalSpent: u.orders
       .filter((o) => o.status !== "CANCELLED")
       .reduce((s, o) => s + Number(o.total), 0),
-    status: u.status === "ACTIVE" && u.memberships[0]?.active ? "ACTIVE" : "INACTIVE",
+    status: u.status === "ACTIVE" && (u.platformRole === "ADMIN" || u.memberships[0]?.active) ? "ACTIVE" : "INACTIVE",
     joinedAt: u.createdAt.toISOString().slice(0, 10),
-    role: publicStoreRole(u.memberships[0]?.role ?? "CUSTOMER"),
+    role: u.platformRole === "ADMIN" ? "ADMIN" : publicStoreRole(u.memberships[0]?.role ?? "CUSTOMER"),
   };
 }
 
@@ -186,6 +187,7 @@ export async function updateAdminUser(id: string, input: UserInput): Promise<Adm
     where: { id, memberships: { some: { storeId } } }, include: userInclude,
   });
   if (!user) throw new ApiError(404, "Usuario no encontrado");
+  if (user.platformRole === "ADMIN") throw new ApiError(403, "La administración global no se modifica desde una tienda");
   const address = user.addresses[0];
   const changedAddress = input.address && Object.entries(input.address).some(([key, value]) => address?.[key as keyof typeof address] !== value);
   if (input.name !== user.name || input.email.trim().toLowerCase() !== user.email.toLowerCase() ||
@@ -205,6 +207,8 @@ export async function updateAdminUser(id: string, input: UserInput): Promise<Adm
 export async function deleteAdminUser(id: string): Promise<void> {
   await requireAdmin();
   const { id: storeId } = await getStoreContext();
+  const user = await prisma.user.findUnique({ where: { id }, select: { platformRole: true } });
+  if (user?.platformRole === "ADMIN") throw new ApiError(403, "La administración global no se modifica desde una tienda");
   const member = await prisma.storeMembership.findUnique({ where: { storeId_userId: { storeId, userId: id } } });
   if (!member) throw new ApiError(404, "Usuario no encontrado");
   if (member.role === "OWNER") throw new ApiError(403, "No se puede retirar al propietario desde este formulario");
