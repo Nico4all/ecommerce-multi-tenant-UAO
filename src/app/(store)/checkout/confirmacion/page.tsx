@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { wompiReturnLocation } from "@/lib/server/wompi-return";
 import {
   fetchWompiTransaction,
   applyWompiTransaction,
@@ -28,14 +29,5 @@ export default async function WompiReturnPage({
   const tx = await fetchWompiTransaction(id).catch(() => null);
   const result = tx ? await applyWompiTransaction(tx).catch(() => null) : null;
 
-  if (!result) redirect("/orders?pago=sin-confirmar");
-
-  // Este es el único punto del flujo que SABE que la transacción se rechazó:
-  // lo acaba de verificar contra la API de Wompi. El pedido cancelado, por sí
-  // solo, no distingue un rechazo de una cancelación de la tienda, así que el
-  // dato viaja para que la pantalla de llegada pueda decirlo sin inventar.
-  const rechazado = result.status === "CANCELLED";
-  redirect(
-    `/checkout/success/${result.code}${rechazado ? "?pago=rechazado" : ""}`,
-  );
+  redirect(wompiReturnLocation(tx, result));
 }

@@ -224,6 +224,8 @@ export interface OrderDetail {
   isGuest: boolean;
   /** Método del último intento de pago; `null` si el pedido no tiene ninguno. */
   paymentMethod: string | null;
+  /** Estado persistido del último intento; opcional para consumidores anteriores. */
+  paymentStatus?: string | null;
 }
 
 /**
@@ -276,6 +278,7 @@ export async function getOrderByCode(code: string): Promise<OrderDetail | null> 
     })),
     isGuest: isGuestOrder,
     paymentMethod: o.payments[0]?.method ?? null,
+    paymentStatus: o.payments[0]?.status ?? null,
   };
 }
 

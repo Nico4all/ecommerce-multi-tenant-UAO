@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { getStoreContext, resolveStoreRequest } from "@/lib/prisma";
 import { runWithStoreContext, StoreContextError } from "./store-context";
+import { privateResponse } from "./private-response";
 
 /** Error de negocio con código HTTP; los servicios lo lanzan y la API lo traduce. */
 export class ApiError extends Error {
@@ -33,13 +34,6 @@ export function withErrorHandling<Args extends unknown[]>(
   handler: (...args: Args) => Promise<Response>,
 ) {
   return async (...args: Args): Promise<Response> => {
-    const privateResponse = (response: Response) => {
-      response.headers.set("Cache-Control", "private, no-store, max-age=0");
-      const vary = new Set((response.headers.get("Vary") ?? "").split(",").map((value) => value.trim()).filter(Boolean));
-      ["Host", "Forwarded", "X-Forwarded-Host"].forEach((value) => vary.add(value));
-      response.headers.set("Vary", [...vary].join(", "));
-      return response;
-    };
     try {
       const request = (args as unknown[])[0];
       const store = request instanceof Request ? await resolveStoreRequest(request) : await getStoreContext();

@@ -12,9 +12,8 @@ import { cn } from "@/lib/utils";
 /**
  * Estado del PAGO de un pedido, deducido de lo que el servidor ya expone.
  *
- * `OrderDetail` trae `status` (del pedido), `paymentMethod` y el historial de
- * eventos, pero NO el estado de la fila `Payment`. Así que esto deduce, y solo
- * afirma lo que esos tres datos sostienen:
+ * `OrderDetail` trae el estado del pedido y del pago, el método y los eventos.
+ * Una indicación de rechazo en la URL nunca sustituye esos datos persistidos:
  *
  *  - Wompi aprueba  -> la orden pasa de PENDING a PAID (`applyWompiTransaction`).
  *  - Wompi rechaza  -> la orden pasa a CANCELLED, el pago a FAILED y el stock
@@ -24,8 +23,8 @@ import { cn } from "@/lib/utils";
  * Un pedido CANCELLED NO permite deducir si hubo cobro: el historial de
  * eventos no lo registra (hay pedidos cancelados con el pago en REFUNDED y sin
  * ningún evento PAID). Por eso un pedido cancelado nunca afirma aquí "no se te
- * cobró nada", salvo cuando quien lo pinta acaba de verificar el rechazo
- * contra la API de Wompi y lo dice con `declined`.
+ * cobró nada". Un rechazo solo se muestra con un intento fallido persistido
+ * y sin evidencia de un cobro anterior.
  *
  * Cuando los datos no alcanzan (un pedido sin ningún pago registrado, o un
  * estado que no conocemos) devuelve `null` y la interfaz calla, en vez de
@@ -115,7 +114,7 @@ const STATES: Record<PaymentStateKey, Omit<PaymentStateInfo, "key">> = {
   declined: {
     label: "Pago no aprobado",
     detail:
-      "El pago no se aprobó, así que el pedido quedó cancelado. No se te cobró nada y los productos volvieron a quedar disponibles.",
+      "El intento de pago no fue aprobado y el pedido está cancelado. Si ves algún movimiento en tu medio de pago, contacta a la tienda para revisarlo.",
     icon: XCircle,
     canPay: false,
     ...TINT.bad,
@@ -133,17 +132,19 @@ const STATES: Record<PaymentStateKey, Omit<PaymentStateInfo, "key">> = {
 export function paymentState({
   status,
   paymentMethod,
+  paymentStatus,
   events,
   declined,
 }: {
   status: string;
   paymentMethod: string | null;
+  paymentStatus?: string | null;
   events?: readonly { status: string }[];
   /**
    * Solo lo pasa la pantalla a la que la pasarela acaba de devolver al
    * cliente, cuando el servidor verificó contra la API de Wompi que la
    * transacción fue rechazada. Se honra únicamente si el pedido está
-   * cancelado; en cualquier otro caso se ignora.
+   * cancelado, el pago falló y no hay evidencia de un cobro anterior.
    */
   declined?: boolean;
 }): PaymentStateInfo | null {
@@ -154,10 +155,11 @@ export function paymentState({
   // Solo la pasarela admite reintento; los métodos antiguos (CARD, EFECTY,
   // TRANSFER…) se conciliaban a mano y no tienen a dónde reenviar al cliente.
   const retryable = paymentMethod === "WOMPI";
+  const previouslyPaid = paymentStatus === "COMPLETED" || paymentStatus === "REFUNDED" || events?.some(event => FULFILLED.includes(event.status));
 
   const key: PaymentStateKey | null =
     status === "CANCELLED"
-      ? declined && !cod
+      ? declined && retryable && paymentStatus === "FAILED" && !previouslyPaid
         ? "declined"
         : "cancelled"
       : cod
