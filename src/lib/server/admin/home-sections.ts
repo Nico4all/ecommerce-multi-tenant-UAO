@@ -1,6 +1,7 @@
 import "server-only";
-import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "../auth";
+import { prisma, getStoreContext } from "@/lib/prisma";
+import { adminStoreId, requireCategory, requireSection } from "./scope";
+import { assertImageReferences } from "../storage";
 import { ApiError } from "../api-helpers";
 import type {
   HomeSectionKind,
@@ -83,7 +84,7 @@ type SectionRow = {
   _count: { banners: number };
 };
 
-function toAdminSection(s: SectionRow): AdminHomeSection {
+function toAdminSection(s: SectionRow, origin: string): AdminHomeSection {
   return {
     id: s.id,
     kind: s.kind as HomeSectionKind,
@@ -95,7 +96,7 @@ function toAdminSection(s: SectionRow): AdminHomeSection {
     bannerLayout: s.bannerLayout as BannerLayout | null,
     bannerPosition: s.bannerPosition as SectionBannerPosition | null,
     bgClass: s.bgClass,
-    bgImageUrl: s.bgImageUrl,
+    bgImageUrl: s.bgImageUrl?.startsWith("/") ? new URL(s.bgImageUrl, origin).href : s.bgImageUrl,
     bgOverlay: s.bgOverlay,
     sortOrder: s.sortOrder,
     active: s.active,
@@ -104,48 +105,58 @@ function toAdminSection(s: SectionRow): AdminHomeSection {
 }
 
 export async function listHomeSections(): Promise<AdminHomeSection[]> {
-  await requireAdmin();
+  const storeId = await adminStoreId();
   const rows = await prisma.homeSection.findMany({
+    where: { storeId },
     orderBy: { sortOrder: "asc" },
-    include: { _count: { select: { banners: true } } },
+    include: { _count: { select: { banners: { where: { storeId } } } } },
   });
-  return rows.map(toAdminSection);
+  const { origin } = await getStoreContext();
+  return rows.map((row) => toAdminSection(row, origin));
 }
 
 /** Una sección concreta, para la página de edición. */
 export async function getHomeSection(id: string): Promise<AdminHomeSection | null> {
-  await requireAdmin();
+  const storeId = await adminStoreId();
   const row = await prisma.homeSection.findUnique({
-    where: { id },
+    where: { id, storeId },
     include: { _count: { select: { banners: true } } },
   });
-  return row ? toAdminSection(row) : null;
+  return row ? toAdminSection(row, (await getStoreContext()).origin) : null;
 }
 
 export async function createHomeSection(input: HomeSectionInput) {
-  await requireAdmin();
+  const storeId = await adminStoreId();
+  const data = toData(input);
+  if (data.categorySlug) await requireCategory(data.categorySlug, storeId);
+  await assertImageReferences([data.bgImageUrl]);
   const last = await prisma.homeSection.findFirst({
+    where: { storeId },
     orderBy: { sortOrder: "desc" },
     select: { sortOrder: true },
   });
   return prisma.homeSection.create({
-    data: { ...toData(input), sortOrder: (last?.sortOrder ?? -1) + 1 },
+    data: { ...data, storeId, sortOrder: (last?.sortOrder ?? -1) + 1 },
   });
 }
 
 export async function updateHomeSection(id: string, input: HomeSectionInput) {
-  await requireAdmin();
+  const storeId = await adminStoreId();
+  await requireSection(id, storeId);
+  const data = toData(input);
+  if (data.categorySlug) await requireCategory(data.categorySlug, storeId);
+  await assertImageReferences([data.bgImageUrl]);
   const updated = await prisma.homeSection
-    .update({ where: { id }, data: toData(input) })
+    .update({ where: { id, storeId }, data })
     .catch(() => null);
   if (!updated) throw new ApiError(404, "Sección no encontrada");
   return updated;
 }
 
 export async function deleteHomeSection(id: string): Promise<void> {
-  await requireAdmin();
+  const storeId = await adminStoreId();
   const section = await prisma.homeSection.findUnique({
-    where: { id },
+    where: { id, storeId },
     include: { _count: { select: { banners: true } } },
   });
   if (!section) throw new ApiError(404, "Sección no encontrada");
@@ -155,7 +166,7 @@ export async function deleteHomeSection(id: string): Promise<void> {
       `Esta sección tiene ${section._count.banners} banner(s). Muévelos o elimínalos primero.`,
     );
   }
-  await prisma.homeSection.delete({ where: { id } });
+  await prisma.homeSection.delete({ where: { id, storeId } });
 }
 
 /** Mueve una sección una posición arriba/abajo intercambiando sortOrder. */
@@ -163,8 +174,8 @@ export async function moveHomeSection(
   id: string,
   direction: "up" | "down",
 ): Promise<void> {
-  await requireAdmin();
-  const all = await prisma.homeSection.findMany({ orderBy: { sortOrder: "asc" } });
+  const storeId = await adminStoreId();
+  const all = await prisma.homeSection.findMany({ where: { storeId }, orderBy: { sortOrder: "asc" } });
   const index = all.findIndex((s) => s.id === id);
   if (index === -1) throw new ApiError(404, "Sección no encontrada");
 
@@ -175,11 +186,11 @@ export async function moveHomeSection(
   const b = all[target];
   await prisma.$transaction([
     prisma.homeSection.update({
-      where: { id: a.id },
+      where: { id: a.id, storeId },
       data: { sortOrder: b.sortOrder },
     }),
     prisma.homeSection.update({
-      where: { id: b.id },
+      where: { id: b.id, storeId },
       data: { sortOrder: a.sortOrder },
     }),
   ]);

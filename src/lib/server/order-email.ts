@@ -1,7 +1,7 @@
 import "server-only";
-import { formatPrice } from "@/lib/format";
+import { commercialPrice, type EmailBranding } from "./commercial-settings";
 import type { Mail } from "./email";
-import { EMAIL, emailShell, emailButton } from "./email-layout";
+import { EMAIL, emailShell, emailButton, escapeEmailHtml as esc } from "./email-layout";
 
 /**
  * Plantilla del correo de pedido (confirmación / envío), estilo "recibo de
@@ -45,36 +45,38 @@ export interface OrderEmailInput {
   trackingNumber?: string | null;
   /** Base pública de la tienda, para el enlace "Ver mi pedido" y las fotos. */
   appUrl: string;
+  branding?: EmailBranding;
 }
 
-function itemRow(item: OrderEmailItem): string {
+function itemRow(item: OrderEmailItem, branding?: EmailBranding): string {
   const variant = item.variantName ? ` · ${item.variantName}` : "";
   const img = item.imageUrl
-    ? `<img src="${item.imageUrl}" width="64" height="64" alt="" style="display:block;border-radius:6px;border:1px solid ${BORDER};object-fit:cover" />`
+    ? `<img src="${esc(item.imageUrl)}" width="64" height="64" alt="" style="display:block;border-radius:6px;border:1px solid ${BORDER};object-fit:cover" />`
     : `<div style="width:64px;height:64px;border-radius:6px;background:#f3f4f6"></div>`;
 
   return `
     <tr>
       <td style="padding:12px 0;border-top:1px solid ${BORDER}" width="64">${img}</td>
       <td style="padding:12px 0 12px 12px;border-top:1px solid ${BORDER};font-family:Arial,Helvetica,sans-serif">
-        <p style="margin:0;font-size:14px;color:${TEXT};font-weight:600">${item.name}</p>
-        <p style="margin:2px 0 0;font-size:12px;color:${MUTED}">${item.brand}${variant} · Cant. ${item.qty}</p>
+        <p style="margin:0;font-size:14px;color:${TEXT};font-weight:600">${esc(item.name)}</p>
+        <p style="margin:2px 0 0;font-size:12px;color:${MUTED}">${esc(item.brand)}${esc(variant)} · Cant. ${item.qty}</p>
       </td>
       <td style="padding:12px 0;border-top:1px solid ${BORDER};font-family:Arial,Helvetica,sans-serif;font-size:14px;color:${TEXT};text-align:right;white-space:nowrap" valign="top">
-        ${formatPrice(item.unitPrice * item.qty)}
+        ${commercialPrice(item.unitPrice * item.qty, branding)}
       </td>
     </tr>`;
 }
 
 export function buildOrderEmail(input: OrderEmailInput): Mail {
+  const formatPrice = (value: number) => commercialPrice(value, input.branding);
   const isShipping = input.kind === "shipping";
   const headline = isShipping ? "Tu pedido está en camino" : "Recibimos tu pedido";
   const intro = isShipping
     ? "Buenas noticias: tu paquete ya salió. En breve lo tendrás en tus manos."
     : "Gracias por tu compra. Te avisaremos cuando tu pedido esté en camino.";
-  const orderUrl = `${input.appUrl}/orders/${input.code}`;
+  const orderUrl = `${input.appUrl}/orders/${encodeURIComponent(input.code)}`;
 
-  const itemsHtml = input.items.map(itemRow).join("");
+  const itemsHtml = input.items.map((item) => itemRow(item, input.branding)).join("");
 
   // Datos del envío: se muestran con lo que haya, aunque falte el enlace.
   const shipInfo =
@@ -84,7 +86,7 @@ export function buildOrderEmail(input: OrderEmailInput): Mail {
         }`
       : "";
   const shipInfoHtml = shipInfo
-    ? `<p style="margin:14px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;color:${TEXT}">${shipInfo}</p>`
+    ? `<p style="margin:14px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;color:${TEXT}">${esc(shipInfo)}</p>`
     : "";
 
   const trackingButton = input.trackingUrl
@@ -98,7 +100,7 @@ export function buildOrderEmail(input: OrderEmailInput): Mail {
           ${headline}
         </h1>
         <p style="margin:10px 0 0;font-family:Arial,Helvetica,sans-serif;font-size:13px;font-weight:700;letter-spacing:0.5px;color:${MUTED}">
-          PEDIDO N.º ${input.code}
+          PEDIDO N.º ${esc(input.code)}
         </p>
       </td>
     </tr>
@@ -118,10 +120,10 @@ export function buildOrderEmail(input: OrderEmailInput): Mail {
           ENVÍO A DOMICILIO
         </p>
         <p style="margin:0;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:${TEXT}">
-          ${input.shippingName}<br />
-          ${input.street}<br />
-          ${input.city}, ${input.state}${input.zip ? ` ${input.zip}` : ""}<br />
-          ${input.country}
+          ${esc(input.shippingName)}<br />
+          ${esc(input.street)}<br />
+          ${esc(input.city)}, ${esc(input.state)}${input.zip ? ` ${esc(input.zip)}` : ""}<br />
+          ${esc(input.country)}
         </p>
       </td>
     </tr>
@@ -149,13 +151,13 @@ export function buildOrderEmail(input: OrderEmailInput): Mail {
 
     <tr>
       <td style="padding:28px 32px 32px;text-align:center">
-        <a href="${orderUrl}" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:${BRAND};text-decoration:underline">
+        <a href="${esc(orderUrl)}" style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:${BRAND};text-decoration:underline">
           Ver el detalle de mi pedido
         </a>
       </td>
     </tr>`;
 
-  const html = emailShell({ appUrl: input.appUrl, preheader: intro, content });
+  const html = emailShell({ appUrl: input.appUrl, branding: input.branding, preheader: intro, content });
 
   const textLines = [
     headline.toUpperCase(),

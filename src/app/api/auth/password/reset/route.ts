@@ -7,6 +7,7 @@ import {
 } from "@/lib/server/api-helpers";
 import { resetPassword } from "@/lib/server/password-reset";
 import { rateLimit, clientIp } from "@/lib/server/rate-limit";
+import { getStoreContext } from "@/lib/prisma";
 
 const schema = z.object({
   token: z.string().min(1, "Falta el token"),
@@ -17,7 +18,8 @@ const schema = z.object({
 export const POST = withErrorHandling(async (req: Request) => {
   // Los tokens son de 256 bits (imposibles de adivinar), pero se limita por IP
   // para cortar cualquier martilleo del endpoint.
-  const { ok } = rateLimit(`reset:ip:${clientIp(req)}`, 10, 15 * 60 * 1000);
+  const { id: storeId } = await getStoreContext();
+  const { ok } = rateLimit(`reset:ip:${storeId}:${clientIp(req)}`, 10, 15 * 60 * 1000);
   if (!ok) {
     throw new ApiError(429, "Demasiados intentos. Espera unos minutos.");
   }

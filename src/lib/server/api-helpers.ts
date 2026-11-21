@@ -1,6 +1,8 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { getStoreContext, resolveStoreRequest } from "@/lib/prisma";
+import { runWithStoreContext, StoreContextError } from "./store-context";
 
 /** Error de negocio con código HTTP; los servicios lo lanzan y la API lo traduce. */
 export class ApiError extends Error {
@@ -31,15 +33,24 @@ export function withErrorHandling<Args extends unknown[]>(
   handler: (...args: Args) => Promise<Response>,
 ) {
   return async (...args: Args): Promise<Response> => {
+    const privateResponse = (response: Response) => {
+      response.headers.set("Cache-Control", "private, no-store, max-age=0");
+      const vary = new Set((response.headers.get("Vary") ?? "").split(",").map((value) => value.trim()).filter(Boolean));
+      ["Host", "Forwarded", "X-Forwarded-Host"].forEach((value) => vary.add(value));
+      response.headers.set("Vary", [...vary].join(", "));
+      return response;
+    };
     try {
-      return await handler(...args);
+      const request = (args as unknown[])[0];
+      const store = request instanceof Request ? await resolveStoreRequest(request) : await getStoreContext();
+      return privateResponse(await runWithStoreContext(store, () => handler(...args)));
     } catch (e) {
-      if (e instanceof ApiError) return jsonError(e.status, e.message);
+      if (e instanceof StoreContextError || e instanceof ApiError) return privateResponse(jsonError(e.status, e.message));
       if (e instanceof z.ZodError) {
-        return jsonError(400, "Datos inválidos", z.flattenError(e).fieldErrors);
+        return privateResponse(jsonError(400, "Datos inválidos", z.flattenError(e).fieldErrors));
       }
       console.error("[api] error inesperado:", e);
-      return jsonError(500, "Error interno del servidor");
+      return privateResponse(jsonError(500, "Error interno del servidor"));
     }
   };
 }

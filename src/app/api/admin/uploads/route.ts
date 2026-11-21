@@ -41,9 +41,11 @@ export const POST = withErrorHandling(async (req: Request) => {
   if (!(file instanceof File)) throw new ApiError(400, "Falta el archivo");
 
   const preset = String(form.get("preset") ?? "product");
-  if (!(preset in IMAGE_PRESETS)) {
+  if (!Object.hasOwn(IMAGE_PRESETS, preset)) {
     throw new ApiError(400, "Tipo de imagen desconocido");
   }
+
+  if (file.size > MAX_UPLOAD_BYTES) throw new ApiError(413, "La imagen excede el tamaño permitido");
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const image = await processAndStoreImage(buffer, preset as ImagePreset);
