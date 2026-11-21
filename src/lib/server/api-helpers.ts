@@ -1,6 +1,9 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { getStoreContext, resolveStoreRequest } from "@/lib/prisma";
+import { runWithStoreContext, StoreContextError } from "./store-context";
+import { privateResponse } from "./private-response";
 
 /** Error de negocio con código HTTP; los servicios lo lanzan y la API lo traduce. */
 export class ApiError extends Error {
@@ -32,14 +35,16 @@ export function withErrorHandling<Args extends unknown[]>(
 ) {
   return async (...args: Args): Promise<Response> => {
     try {
-      return await handler(...args);
+      const request = (args as unknown[])[0];
+      const store = request instanceof Request ? await resolveStoreRequest(request) : await getStoreContext();
+      return privateResponse(await runWithStoreContext(store, () => handler(...args)));
     } catch (e) {
-      if (e instanceof ApiError) return jsonError(e.status, e.message);
+      if (e instanceof StoreContextError || e instanceof ApiError) return privateResponse(jsonError(e.status, e.message));
       if (e instanceof z.ZodError) {
-        return jsonError(400, "Datos inválidos", z.flattenError(e).fieldErrors);
+        return privateResponse(jsonError(400, "Datos inválidos", z.flattenError(e).fieldErrors));
       }
       console.error("[api] error inesperado:", e);
-      return jsonError(500, "Error interno del servidor");
+      return privateResponse(jsonError(500, "Error interno del servidor"));
     }
   };
 }

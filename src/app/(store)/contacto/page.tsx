@@ -1,16 +1,20 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Mail, MessageCircle, FileText } from "lucide-react";
 import { getSession } from "@/lib/server/auth";
 import { ContactForm } from "@/components/support/support-forms";
-import { LEGAL_INFO } from "@/lib/legal-info";
-
-export const metadata: Metadata = {
+import { getStoreLegalInfo } from "@/lib/server/store-presentation";
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   title: "Contáctanos — Variedades Los Primos",
   description: "Escríbenos y te respondemos al correo lo antes posible.",
-};
+}, "/contacto");
+}
+
 
 export default async function ContactoPage() {
+  const LEGAL_INFO = await getStoreLegalInfo();
   const session = await getSession();
 
   return (
@@ -27,8 +31,8 @@ export default async function ContactoPage() {
           <Mail className="size-4 text-primary" />
           <p className="mt-2 text-sm font-medium">Correo</p>
           <p className="break-all text-xs text-muted-foreground">
-            <a href={`mailto:${LEGAL_INFO.correoContacto}`} className="hover:underline">
-              {LEGAL_INFO.correoContacto}
+            <a href={LEGAL_INFO.contactHref} className="hover:underline">
+              {LEGAL_INFO.correoContacto || "formulario de contacto"}
             </a>
           </p>
         </div>

@@ -2,8 +2,9 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Search, Loader2, Package, ClipboardList, User } from "lucide-react";
+import { Loader2, Package, ClipboardList, User } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SearchField } from "@/components/admin/search-field";
 import { api } from "@/lib/api-client";
 
 interface Results {
@@ -67,20 +68,18 @@ export function AdminSearch({ className }: { className?: string }) {
 
   return (
     <div ref={rootRef} className={cn("relative", className)}>
-      <div className="flex h-9 items-center rounded-md border border-border bg-muted/40 px-3">
-        <Search className="size-4 text-muted-foreground" />
-        <input
-          value={q}
-          onChange={(e) => {
-            setQ(e.target.value);
-            setOpen(true);
-          }}
-          onFocus={() => setOpen(true)}
-          onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
-          placeholder="Buscar productos, pedidos o usuarios…"
-          className="h-full flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground"
-        />
-      </div>
+      <SearchField
+        label="Buscar en el panel: productos, pedidos o usuarios"
+        placeholder="Buscar productos, pedidos o usuarios…"
+        value={q}
+        onChange={(v) => {
+          setQ(v);
+          setOpen(true);
+        }}
+        onFocus={() => setOpen(true)}
+        onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
+        fieldClassName="bg-muted/40"
+      />
 
       {showPanel && (
         <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border border-border bg-popover shadow-lg">

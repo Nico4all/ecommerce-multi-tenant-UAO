@@ -1,12 +1,15 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import { getProducts, getBrands, type SortKey } from "@/lib/queries";
 import { Breadcrumbs } from "@/components/catalog/breadcrumbs";
 import { CatalogView } from "@/components/catalog/catalog-view";
-
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   title: "Buscar — Variedades Los Primos",
   robots: { index: false, follow: true },
-};
+}, "/search");
+}
+
 
 const SORTS: SortKey[] = [
   "relevance",
@@ -52,7 +55,19 @@ export default async function SearchPage({
           (SORT_TITLE[initialSort] ?? "Todos los productos")
         )}
       </h1>
-      <CatalogView products={products} brands={brands} initialSort={initialSort} />
+      <CatalogView
+        products={products}
+        brands={brands}
+        initialSort={initialSort}
+        emptyTitle={
+          q ? `Sin resultados para "${q}"` : "Todavía no hay productos"
+        }
+        emptyHint={
+          q
+            ? "Revisa la ortografía, prueba con menos palabras o busca por categoría."
+            : "Explora las categorías para ver lo que hay disponible."
+        }
+      />
     </div>
   );
 }

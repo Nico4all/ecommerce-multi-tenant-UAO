@@ -5,8 +5,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Field } from "@/components/form-field";
+import { PasswordField } from "@/components/auth/password-field";
 import {
   changePasswordFormSchema,
   type ChangePasswordValues,
@@ -48,26 +48,30 @@ export function ChangePasswordForm({ hasPassword }: { hasPassword: boolean }) {
     <form onSubmit={onSubmit} className="space-y-4">
       {hasPassword && (
         <Field label="Contraseña actual" htmlFor="cp-current" error={errors.currentPassword}>
-          <Input
+          <PasswordField
             id="cp-current"
-            type="password"
+            withLock={false}
+            className="h-9"
             autoComplete="current-password"
             {...register("currentPassword")}
           />
         </Field>
       )}
       <Field label="Nueva contraseña" htmlFor="cp-new" error={errors.newPassword}>
-        <Input
+        <PasswordField
           id="cp-new"
-          type="password"
+          withLock={false}
+          className="h-9"
+          minLength={8}
           autoComplete="new-password"
           {...register("newPassword")}
         />
       </Field>
       <Field label="Repite la nueva contraseña" htmlFor="cp-confirm" error={errors.confirm}>
-        <Input
+        <PasswordField
           id="cp-confirm"
-          type="password"
+          withLock={false}
+          className="h-9"
           autoComplete="new-password"
           {...register("confirm")}
         />

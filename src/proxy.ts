@@ -1,5 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { jwtVerify } from "jose";
+import { getSessionFromToken } from "@/lib/server/auth";
+import { runWithStoreContext } from "@/lib/server/store-context";
+import { storeIngress, privateStoreHeaders } from "@/lib/server/store-ingress";
 
 /**
  * Proxy (antes "middleware" — renombrado en Next 16).
@@ -9,51 +11,54 @@ import { jwtVerify } from "jose";
 
 const SESSION_COOKIE = "vlp_session";
 
-async function getRole(req: NextRequest): Promise<string | null> {
-  const token = req.cookies.get(SESSION_COOKIE)?.value;
-  const secret = process.env.SESSION_SECRET;
-  if (!token || !secret) return null;
-  try {
-    const { payload } = await jwtVerify(
-      token,
-      new TextEncoder().encode(secret),
-    );
-    return typeof payload.role === "string" ? payload.role : null;
-  } catch {
-    return null;
-  }
-}
-
 export async function proxy(req: NextRequest) {
+  const ingress = await storeIngress(req);
+  if (ingress.response) return ingress.response;
+  const privateResponse = (response: NextResponse) => {
+    Object.entries(privateStoreHeaders).forEach(([key, value]) => response.headers.set(key, value));
+    return response;
+  };
   const { pathname } = req.nextUrl;
   const isApi = pathname.startsWith("/api/");
-  const role = await getRole(req);
+  const isPlatform = pathname === "/platform" || pathname.startsWith("/platform/") || pathname === "/api/platform" || pathname.startsWith("/api/platform/");
+  if (!isPlatform && pathname !== "/admin" && !pathname.startsWith("/admin/") && pathname !== "/api/admin" && !pathname.startsWith("/api/admin/")) {
+    return privateResponse(NextResponse.next());
+  }
+  let role: string | null;
+  let platformAdmin = false;
+  try {
+    const session = await runWithStoreContext(ingress.context, () => getSessionFromToken(req.cookies.get(SESSION_COOKIE)?.value));
+    role = session?.role ?? null;
+    platformAdmin = session?.platformAdmin === true;
+  } catch {
+    return privateResponse(NextResponse.json({ ok: false, error: "No se pudo validar el acceso" }, { status: 503 }));
+  }
 
   if (!role) {
     if (isApi) {
-      return NextResponse.json(
+      return privateResponse(NextResponse.json(
         { ok: false, error: "Inicia sesión para continuar" },
         { status: 401 },
-      );
+      ));
     }
-    const url = new URL("/login", req.url);
+    const url = new URL("/login", ingress.context.origin);
     url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    return privateResponse(NextResponse.redirect(url));
   }
 
-  if (role !== "ADMIN") {
+  if (role !== "ADMIN" || (isPlatform && !platformAdmin)) {
     if (isApi) {
-      return NextResponse.json(
-        { ok: false, error: "Solo administradores" },
+      return privateResponse(NextResponse.json(
+        { ok: false, error: isPlatform ? "Solo administradores de plataforma" : "Solo administradores" },
         { status: 403 },
-      );
+      ));
     }
-    return NextResponse.redirect(new URL("/", req.url));
+    return privateResponse(NextResponse.redirect(new URL("/", ingress.context.origin)));
   }
 
-  return NextResponse.next();
+  return privateResponse(NextResponse.next());
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*"],
+  matcher: ["/((?!_next/static|_next/webpack-hmr).*)"],
 };

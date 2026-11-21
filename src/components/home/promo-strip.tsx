@@ -9,6 +9,11 @@ import type { Banner } from "@/types";
  * Con imagen propia, esta es el fondo y el icono decorativo desaparece: si el
  * admin subió una gráfica, la chispa encima sobra. Texto y botón son opcionales;
  * la franja entera es el enlace.
+ *
+ * El título de la franja va como párrafo y no como `h2`: los `h2` del inicio
+ * son los encabezados de sección, y meter uno más por cada promoción llenaba
+ * el esquema del documento de títulos que no abren ninguna sección. El peso
+ * visual se mantiene con tipografía, que es lo que la promoción necesita.
  */
 export function PromoStrip({ banners }: { banners: Banner[] }) {
   if (banners.length === 0) return null;
@@ -25,8 +30,8 @@ export function PromoStrip({ banners }: { banners: Banner[] }) {
             href={banner.href}
             aria-label={hasText ? undefined : `Ver ${banner.href}`}
             className={cn(
-              "group relative flex flex-col items-start justify-between gap-4 overflow-hidden rounded-xl p-6 shadow-sm sm:flex-row sm:items-center sm:p-8",
-              hasImage ? "min-h-40 bg-slate-900 text-white" : banner.className,
+              "group relative flex flex-col items-start justify-between gap-4 overflow-hidden rounded-xl p-6 shadow-sm outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:flex-row sm:items-center sm:p-8",
+              hasImage ? "min-h-40 bg-media-foreground text-media" : banner.className,
             )}
           >
             {hasImage ? (
@@ -53,19 +58,19 @@ export function PromoStrip({ banners }: { banners: Banner[] }) {
                     <Sparkles className="size-6" />
                   </span>
                 )}
-                <div>
+                <div className="min-w-0">
                   {banner.highlight && (
-                    <span className="block font-heading text-2xl font-extrabold leading-none drop-shadow-sm sm:text-3xl">
+                    <span className="block font-heading text-2xl font-extrabold leading-none tracking-tight drop-shadow-sm sm:text-3xl">
                       {banner.highlight}
                     </span>
                   )}
                   {banner.title && (
-                    <h2 className="font-heading text-xl font-bold sm:text-2xl">
+                    <p className="font-heading text-xl font-bold leading-tight sm:text-2xl">
                       {banner.title}
-                    </h2>
+                    </p>
                   )}
                   {banner.subtitle && (
-                    <p className="mt-0.5 text-sm text-white/90 sm:text-base">
+                    <p className="mt-0.5 text-sm opacity-90 sm:text-base">
                       {banner.subtitle}
                     </p>
                   )}
@@ -74,7 +79,7 @@ export function PromoStrip({ banners }: { banners: Banner[] }) {
             )}
 
             {banner.cta && (
-              <span className="relative inline-flex items-center gap-1.5 rounded-full bg-white/95 px-5 py-2.5 text-sm font-semibold text-slate-900 transition-transform group-hover:translate-x-0.5 sm:ml-auto">
+              <span className="relative inline-flex shrink-0 items-center gap-1.5 rounded-full bg-media px-5 py-2.5 text-sm font-semibold text-media-foreground transition-transform group-hover:translate-x-0.5 sm:ml-auto">
                 {banner.cta}
                 <ArrowRight className="size-4" />
               </span>

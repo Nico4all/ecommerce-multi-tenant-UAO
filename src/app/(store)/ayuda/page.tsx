@@ -1,3 +1,4 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Truck, RotateCcw, CreditCard, FileText, LifeBuoy } from "lucide-react";
@@ -6,11 +7,13 @@ import { buttonVariants } from "@/components/ui/button";
 import { formatPrice } from "@/lib/format";
 import { FREE_SHIPPING_THRESHOLD, SHIPPING_COST } from "@/lib/shipping";
 import { CITIES } from "@/lib/colombia";
-
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   title: "Centro de ayuda — Variedades Los Primos",
   description: "Envíos, devoluciones, pagos y cómo radicar una PQR.",
-};
+}, "/ayuda");
+}
+
 
 /** Las cifras salen de las mismas constantes que usa el checkout: no se desfasan. */
 export default function AyudaPage() {

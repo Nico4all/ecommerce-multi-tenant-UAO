@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { wompiReturnLocation } from "@/lib/server/wompi-return";
 import {
   fetchWompiTransaction,
   applyWompiTransaction,
@@ -10,7 +11,12 @@ import {
  * Wompi vuelve aquí con ?id=<transacción>. Se consulta el estado directo a la
  * API de Wompi (nunca se confía en parámetros de la URL) y se aplica a la
  * orden — la misma lógica idempotente del webhook, por si este aún no llegó.
- * Luego se redirige a la página del pedido.
+ * Luego se redirige a la página del pedido, que es la que explica en qué
+ * quedó el pago (aprobado, pendiente o rechazado).
+ *
+ * Si la transacción no se puede verificar, el destino sigue siendo la lista de
+ * pedidos, pero marcada: antes el cliente aterrizaba ahí sin ninguna
+ * explicación después de haber pasado por la pasarela.
  */
 export default async function WompiReturnPage({
   searchParams,
@@ -23,5 +29,5 @@ export default async function WompiReturnPage({
   const tx = await fetchWompiTransaction(id).catch(() => null);
   const result = tx ? await applyWompiTransaction(tx).catch(() => null) : null;
 
-  redirect(result ? `/checkout/success/${result.code}` : "/orders");
+  redirect(wompiReturnLocation(tx, result));
 }

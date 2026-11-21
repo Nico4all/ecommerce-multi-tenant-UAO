@@ -1,15 +1,19 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage, LegalSection } from "@/components/legal/legal-page";
-import { LEGAL_INFO } from "@/lib/legal-info";
-
-export const metadata: Metadata = {
+import { getStoreLegalInfo } from "@/lib/server/store-presentation";
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   title: "Retracto, Devoluciones y Garantías — Variedades Los Primos",
   description:
     "Derecho de retracto, cómo devolver un producto y garantía legal, conforme al Estatuto del Consumidor.",
-};
+}, "/retracto");
+}
 
-export default function RetractoPage() {
+
+export default async function RetractoPage() {
+  const LEGAL_INFO = await getStoreLegalInfo();
   return (
     <LegalPage
       title="Retracto, Devoluciones y Garantías"
@@ -110,8 +114,8 @@ export default function RetractoPage() {
         <p>
           Escríbenos desde <Link href="/contacto">Contáctanos</Link> o{" "}
           <Link href="/pqr">radica una PQR</Link>, o al correo{" "}
-          <a href={`mailto:${LEGAL_INFO.correoContacto}`}>
-            {LEGAL_INFO.correoContacto}
+          <a href={LEGAL_INFO.contactHref}>
+            {LEGAL_INFO.correoContacto || "formulario de contacto"}
           </a>
           .
         </p>

@@ -1,12 +1,19 @@
+"use client";
+
+import { useStoreBrand } from "./store-brand-provider";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import {
+  DEFAULT_STORE_BRAND,
+  type BrandAsset,
+} from "@/components/layout/store-brand";
 
 /**
  * Marca desacoplada.
  *
  * La plataforma es multi-tienda, así que el componente no conoce ningún
- * logotipo concreto: recibe un `BrandAsset` y lo pinta. `STORE_BRAND` es el de
- * la tienda activa y es el único que se publica de cara al cliente.
+ * logotipo concreto: recibe un `BrandAsset` o usa la proyección pública del
+ * contexto de tienda. La constante histórica solo conserva compatibilidad.
  *
  * La marca institucional UAO vive aparte, en `AcademicBrandMark`, y queda
  * limitada a demostración académica: aplicar la guía visual del manual no
@@ -19,23 +26,12 @@ import { cn } from "@/lib/utils";
  * cuando los degradados dejan de pintarse.
  */
 
-export type BrandAsset = {
-  /** Ruta pública del activo. */
-  src: string;
-  /** Nombre del comercio; se usa como texto alternativo. */
-  alt: string;
-  /** Dimensiones reales del archivo, para reservar el hueco mientras carga. */
-  width: number;
-  height: number;
-};
+export type { BrandAsset };
 
-/** Marca comercial de la tienda activa. */
-export const STORE_BRAND: BrandAsset = {
-  src: "/logo-variedades-los-primos.svg",
-  alt: "Variedades Los Primos",
-  width: 640,
-  height: 150,
-};
+/**
+ * Export histórico; los componentes resuelven la marca actual en el provider.
+ */
+export const STORE_BRAND: BrandAsset = DEFAULT_STORE_BRAND.logo;
 
 /**
  * Activo autorizado de la marca institucional.
@@ -92,12 +88,14 @@ const DEFAULT_MARK_HEIGHT = "2.25rem";
  * mantiene la proporción si eso llega a pasar.
  */
 export function BrandMark({
-  brand = STORE_BRAND,
+  brand: suppliedBrand,
   className,
 }: {
   brand?: BrandAsset;
   className?: string;
 }) {
+  const activeBrand = useStoreBrand();
+  const brand = suppliedBrand ?? activeBrand.logo;
   return (
     // eslint-disable-next-line @next/next/no-img-element -- SVG estático de marca: next/image no lo optimiza y añadiría trabajo para nada
     <img
@@ -112,7 +110,7 @@ export function BrandMark({
 
 /** Marca enlazada al inicio de la tienda. */
 export function BrandLink({
-  brand = STORE_BRAND,
+  brand: suppliedBrand,
   className,
   imageClassName,
   href = "/",
@@ -122,6 +120,8 @@ export function BrandLink({
   imageClassName?: string;
   href?: string;
 }) {
+  const activeBrand = useStoreBrand();
+  const brand = suppliedBrand ?? activeBrand.logo;
   return (
     <Link
       href={href}

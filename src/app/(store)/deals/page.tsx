@@ -1,16 +1,19 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import { getProducts, getBrands } from "@/lib/queries";
 import { Breadcrumbs } from "@/components/catalog/breadcrumbs";
 import { CatalogView } from "@/components/catalog/catalog-view";
 
 export const dynamic = "force-dynamic";
-
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   title: "Mejores ofertas — Variedades Los Primos",
   description:
     "Descubre las ofertas y descuentos disponibles en Variedades Los Primos, tienda online en Colombia.",
   alternates: { canonical: "/deals" },
-};
+}, "/deals");
+}
+
 
 export default async function DealsPage() {
   const [products, brands] = await Promise.all([
@@ -29,7 +32,12 @@ export default async function DealsPage() {
           Los mayores descuentos de Variedades Los Primos, actualizados cada día.
         </p>
       </div>
-      <CatalogView products={products} brands={brands} />
+      <CatalogView
+        products={products}
+        brands={brands}
+        emptyTitle="Ahora mismo no hay ofertas"
+        emptyHint="Vuelve pronto: los descuentos se actualizan cada día."
+      />
     </div>
   );
 }

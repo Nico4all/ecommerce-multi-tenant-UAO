@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "../auth";
+import { adminStoreId, requireSection } from "./scope";
+import { assertImageReferences } from "../storage";
 import { ApiError } from "../api-helpers";
 
 export type BannerPlacement = "HERO" | "HERO_SIDE" | "PROMO" | "STRIP";
@@ -53,32 +54,38 @@ function toData(input: BannerInput) {
 }
 
 export async function listAdminBanners(): Promise<AdminBannerRow[]> {
-  await requireAdmin();
+  const storeId = await adminStoreId();
   return prisma.banner.findMany({
+    where: { storeId },
     orderBy: [{ placement: "asc" }, { sortOrder: "asc" }],
   });
 }
 
 export async function createBanner(input: BannerInput): Promise<AdminBannerRow> {
-  await requireAdmin();
-  return prisma.banner.create({ data: toData(input) });
+  const storeId = await adminStoreId();
+  if (input.sectionId) await requireSection(input.sectionId, storeId);
+  await assertImageReferences([input.imageUrl]);
+  return prisma.banner.create({ data: { ...toData(input), storeId } });
 }
 
 export async function updateBanner(
   id: string,
   input: BannerInput,
 ): Promise<AdminBannerRow> {
-  await requireAdmin();
+  const storeId = await adminStoreId();
+  if (!await prisma.banner.findUnique({ where: { id, storeId }, select: { id: true } })) throw new ApiError(404, "Banner no encontrado");
+  if (input.sectionId) await requireSection(input.sectionId, storeId);
+  await assertImageReferences([input.imageUrl]);
   const updated = await prisma.banner
-    .update({ where: { id }, data: toData(input) })
+    .update({ where: { id, storeId }, data: toData(input) })
     .catch(() => null);
   if (!updated) throw new ApiError(404, "Banner no encontrado");
   return updated;
 }
 
 export async function deleteBanner(id: string): Promise<void> {
-  await requireAdmin();
-  await prisma.banner.delete({ where: { id } }).catch(() => {
+  const storeId = await adminStoreId();
+  await prisma.banner.delete({ where: { id, storeId } }).catch(() => {
     throw new ApiError(404, "Banner no encontrado");
   });
 }

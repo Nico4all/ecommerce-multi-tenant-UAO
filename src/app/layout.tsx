@@ -1,14 +1,13 @@
+export const dynamic = "force-dynamic";
+import { getStoreSeo, storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import { DM_Sans } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
-import { LEGAL_INFO } from "@/lib/legal-info";
+import { getStoreBrand, getStoreLegalInfo } from "@/lib/server/store-presentation";
+import { StoreBrandProvider } from "@/components/layout/store-brand-provider";
 import {
-  SITE_DESCRIPTION,
-  SITE_NAME,
-  SITE_URL,
-  absoluteUrl,
   serializeJsonLd,
 } from "@/lib/seo";
 
@@ -30,7 +29,9 @@ const dmSans = DM_Sans({
   display: "swap",
 });
 
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  const { name: SITE_NAME, origin: SITE_URL, description: SITE_DESCRIPTION } = await getStoreSeo();
+  return storePageMetadata({
   metadataBase: new URL(SITE_URL),
   title: "Variedades Los Primos | Tienda online en Colombia",
   description: SITE_DESCRIPTION,
@@ -67,9 +68,19 @@ export const metadata: Metadata = {
       "max-video-preview": -1,
     },
   },
-};
+});
+}
 
-const organizationJsonLd = {
+
+
+export default async function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  const [brand, site, LEGAL_INFO] = await Promise.all([getStoreBrand(), getStoreSeo(), getStoreLegalInfo()]);
+  const SITE_NAME = site.name, SITE_URL = site.origin;
+  const organizationJsonLd = {
   "@context": "https://schema.org",
   "@graph": [
     {
@@ -79,9 +90,9 @@ const organizationJsonLd = {
       url: SITE_URL,
       logo: {
         "@type": "ImageObject",
-        url: absoluteUrl("/icon.svg"),
-        width: 150,
-        height: 150,
+        url: brand.logo.src.startsWith("data:") ? undefined : brand.logo.src,
+        width: brand.logo.width,
+        height: brand.logo.height,
       },
       email: LEGAL_INFO.correoContacto,
       address: {
@@ -109,12 +120,6 @@ const organizationJsonLd = {
     },
   ],
 };
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
   return (
     <html
       lang="es"
@@ -132,8 +137,10 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          {children}
-          <Toaster position="bottom-right" />
+          <StoreBrandProvider brand={brand}>
+            {children}
+            <Toaster position="bottom-right" />
+          </StoreBrandProvider>
         </ThemeProvider>
       </body>
     </html>

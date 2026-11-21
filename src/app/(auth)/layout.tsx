@@ -1,37 +1,34 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
-import Link from "next/link";
-import { Store } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
-
-export const metadata: Metadata = {
+import { BrandLink } from "@/components/layout/logo";
+import { getStoreBrand } from "@/lib/server/store-presentation";
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   robots: { index: false, follow: false },
-};
+});
+}
 
-export default function AuthLayout({
+
+export default async function AuthLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  // Mismo contexto validado en servidor que el resto de la tienda.
+  // Antes estas pantallas dibujaban su propia versión del
+  // nombre con un icono genérico, es decir, una segunda marca inventada
+  // conviviendo con la real.
+  const brand = await getStoreBrand();
+
   return (
-    <div className="flex min-h-dvh flex-col bg-muted/30">
-      <header className="flex items-center justify-between px-4 py-4 sm:px-6">
-        <Link
-          href="/"
-          aria-label="Variedades Los Primos - Inicio"
-          className="flex items-center gap-2 font-heading font-extrabold"
-        >
-          <span className="grid size-8 shrink-0 place-items-center rounded-md bg-primary text-primary-foreground">
-            <Store className="size-5" strokeWidth={2.25} />
-          </span>
-          <span className="flex flex-col justify-center leading-none">
-            <span className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">
-              Variedades
-            </span>
-            <span className="text-lg text-foreground">
-              Los <span className="text-primary">Primos</span>
-            </span>
-          </span>
-        </Link>
+    <div className="flex min-h-dvh flex-col bg-background">
+      {/* Filete rojo dominante: en una pantalla tan sobria es lo que mantiene
+          presente la marca sin competir con el formulario. */}
+      <span aria-hidden className="h-1 w-full shrink-0 bg-brand" />
+
+      <header className="flex items-center justify-between gap-3 px-4 py-4 sm:px-6">
+        <BrandLink brand={brand.logo} imageClassName="h-8 sm:h-9" />
         <ThemeToggle />
       </header>
 
@@ -39,8 +36,11 @@ export default function AuthLayout({
         {children}
       </main>
 
-      <footer className="p-4 text-center text-xs text-muted-foreground">
-        © {new Date().getFullYear()} Variedades Los Primos · Compra protegida
+      <footer className="px-4 py-6 text-center text-xs text-muted-foreground">
+        <p>{brand.tagline}</p>
+        <p className="mt-1">
+          © {new Date().getFullYear()} {brand.name} · Compra protegida
+        </p>
       </footer>
     </div>
   );

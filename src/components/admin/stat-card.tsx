@@ -17,7 +17,10 @@ export function StatCard({
     <div className="rounded-xl border border-border bg-card p-4">
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 truncate text-sm text-muted-foreground">{label}</span>
-        <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary">
+        <span
+          aria-hidden
+          className="grid size-8 shrink-0 place-items-center rounded-lg bg-primary/10 text-primary"
+        >
           <Icon className="size-4" />
         </span>
       </div>
@@ -30,13 +33,13 @@ export function StatCard({
         <p
           className={cn(
             "mt-1 flex items-center gap-1 text-xs font-medium",
-            positive ? "text-success" : "text-destructive",
+            positive ? "text-success-ink" : "text-destructive",
           )}
         >
           {positive ? (
-            <TrendingUp className="size-3.5" />
+            <TrendingUp aria-hidden className="size-3.5" />
           ) : (
-            <TrendingDown className="size-3.5" />
+            <TrendingDown aria-hidden className="size-3.5" />
           )}
           {positive ? "+" : ""}
           {delta}%

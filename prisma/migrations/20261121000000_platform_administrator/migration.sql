@@ -1,0 +1,2 @@
+ALTER TABLE `users`
+  ADD COLUMN `platformRole` ENUM('NONE', 'ADMIN') NOT NULL DEFAULT 'NONE';

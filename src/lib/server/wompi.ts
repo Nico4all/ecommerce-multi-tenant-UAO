@@ -1,6 +1,9 @@
 import "server-only";
-import { createHash } from "node:crypto";
-import { prisma } from "@/lib/prisma";
+import { createHash, timingSafeEqual } from "node:crypto";
+import { z } from "zod";
+import { prisma, getStoreContext, resolveWompiPaymentStore } from "@/lib/prisma";
+import { runWithStoreContext } from "./store-context";
+import { ApiError } from "./api-helpers";
 import { restockOrderOnce } from "./stock";
 import { sendOrderConfirmationEmail } from "./order-emails";
 
@@ -32,16 +35,21 @@ function env(name: string): string {
 
 /** ¿Hay llaves configuradas? (para degradar con un error claro, no un 500 críptico) */
 export function wompiConfigured(): boolean {
-  return Boolean(
-    process.env.WOMPI_PUBLIC_KEY &&
-      process.env.WOMPI_PRIVATE_KEY &&
-      process.env.WOMPI_INTEGRITY_SECRET,
-  );
+  const environment = wompiEnvironment();
+  return !!environment && !!process.env.WOMPI_PRIVATE_KEY?.startsWith(`prv_${environment}_`) &&
+    !!process.env.WOMPI_INTEGRITY_SECRET?.startsWith(`${environment}_integrity_`);
+}
+
+export function wompiEnvironment(): "test" | "prod" | null {
+  const match = /^pub_(test|prod)_.+$/.exec(process.env.WOMPI_PUBLIC_KEY ?? "");
+  return match ? match[1] as "test" | "prod" : null;
 }
 
 /** Base de la API según el ambiente de las llaves. */
 function apiBase(): string {
-  return env("WOMPI_PUBLIC_KEY").includes("_test_")
+  const environment = wompiEnvironment();
+  if (!environment || !env("WOMPI_PRIVATE_KEY").startsWith(`prv_${environment}_`)) throw new ApiError(503, "Wompi no está configurado correctamente");
+  return environment === "test"
     ? "https://sandbox.wompi.co/v1"
     : "https://production.wompi.co/v1";
 }
@@ -67,7 +75,7 @@ export function buildPaymentReference(code: string, attempt: number): string {
 
 /** Recupera el código del pedido a partir de la referencia de un intento. */
 export function orderCodeFromReference(reference: string): string {
-  return reference.replace(/-Rd+$/, "");
+  return reference.replace(/-R\d+$/, "");
 }
 
 /** Firma de integridad: SHA-256(referencia + monto en centavos + moneda + secreto). */
@@ -85,6 +93,8 @@ export function buildWompiCheckoutUrl(input: {
   customerName: string;
   redirectUrl: string;
 }): string {
+  if (!wompiConfigured()) throw new ApiError(503, "Wompi no está configurado correctamente");
+  if (!Number.isSafeInteger(input.amountInCents) || input.amountInCents <= 0) throw new ApiError(400, "Importe de pago inválido");
   const params = new URLSearchParams({
     "public-key": env("WOMPI_PUBLIC_KEY"),
     currency: CURRENCY,
@@ -107,6 +117,12 @@ export interface WompiTransaction {
   payment_method_type?: string; // CARD, PSE, NEQUI…
 }
 
+export const transactionSchema = z.object({
+  id: z.string().min(1).max(191), status: z.enum(["APPROVED", "DECLINED", "VOIDED", "ERROR", "PENDING"]),
+  reference: z.string().min(1).max(191), amount_in_cents: z.number().int().nonnegative().safe(),
+  currency: z.string().length(3), payment_method_type: z.string().max(40).optional(),
+});
+
 /** Consulta una transacción a la API de Wompi (server-side). */
 export async function fetchWompiTransaction(
   id: string,
@@ -114,12 +130,14 @@ export async function fetchWompiTransaction(
   const res = await fetch(`${apiBase()}/transactions/${encodeURIComponent(id)}`, {
     headers: { Authorization: `Bearer ${env("WOMPI_PRIVATE_KEY")}` },
     cache: "no-store",
+    signal: AbortSignal.timeout(15000),
   });
   if (!res.ok) return null;
   const json = (await res.json().catch(() => null)) as {
     data?: WompiTransaction;
   } | null;
-  return json?.data ?? null;
+  const parsed = transactionSchema.safeParse(json?.data);
+  return parsed.success && parsed.data.id === id ? parsed.data : null;
 }
 
 /**
@@ -138,118 +156,116 @@ export async function fetchWompiTransactionsByReference(
     {
       headers: { Authorization: `Bearer ${env("WOMPI_PRIVATE_KEY")}` },
       cache: "no-store",
+      signal: AbortSignal.timeout(15000),
     },
   );
   if (!res.ok) return [];
   const json = (await res.json().catch(() => null)) as {
     data?: WompiTransaction[];
   } | null;
-  return Array.isArray(json?.data) ? json.data : [];
+  const parsed = z.array(transactionSchema).safeParse(json?.data);
+  return parsed.success ? parsed.data.filter((transaction) => transaction.reference === reference) : [];
 }
 
-/** Lee una ruta tipo "transaction.status" dentro del objeto `data` del evento. */
-function pick(obj: unknown, path: string): unknown {
-  return path
-    .split(".")
-    .reduce<unknown>(
-      (acc, key) =>
-        acc && typeof acc === "object"
-          ? (acc as Record<string, unknown>)[key]
-          : undefined,
-      obj,
-    );
-}
-
-/**
- * Verifica la firma de un evento de Wompi: SHA-256 de los valores listados en
- * `signature.properties` (en orden) + timestamp + secreto de eventos. Sin esta
- * verificación cualquiera podría marcar pedidos como pagados con un POST.
- */
-export function verifyWompiEvent(event: {
-  data?: unknown;
-  timestamp?: number;
-  signature?: { properties?: string[]; checksum?: string };
-}): boolean {
-  const secret = process.env.WOMPI_EVENTS_SECRET;
-  const props = event.signature?.properties;
-  const checksum = event.signature?.checksum;
-  if (!secret || !props || !checksum || event.timestamp === undefined) return false;
-
-  const concatenated = props.map((p) => String(pick(event.data, p) ?? "")).join("");
-  const expected = createHash("sha256")
-    .update(`${concatenated}${event.timestamp}${secret}`)
-    .digest("hex");
-  return expected.toLowerCase() === checksum.toLowerCase();
-}
-
-/**
- * Aplica el estado de una transacción de Wompi a la orden (por `reference` =
- * código del pedido). Idempotente: webhook y página de retorno pueden llegar
- * en cualquier orden o repetirse sin efectos dobles.
- */
-export async function applyWompiTransaction(
-  tx: WompiTransaction,
-): Promise<{ code: string; status: string } | null> {
-  // La referencia puede traer el sufijo del reintento (`VLP-10235-R2`).
-  const order = await prisma.order.findUnique({
-    where: { code: orderCodeFromReference(tx.reference) },
-    include: { payments: { orderBy: { createdAt: "desc" }, take: 1 } },
+/** Firma dinámica según properties; rechazar rutas ausentes o no escalares. */
+export function verifyWompiEvent(event: unknown, secret = process.env.WOMPI_EVENTS_SECRET): boolean {
+  const parsed = eventSchema.safeParse(event);
+  if (!secret || !parsed.success) return false;
+  const { data, timestamp, signature } = parsed.data;
+  const values = signature.properties.map((path) => {
+    let value: unknown = data;
+    for (const part of path.split(".")) {
+      if (!value || typeof value !== "object" || !Object.hasOwn(value, part)) return undefined;
+      value = (value as Record<string, unknown>)[part];
+    }
+    return ["string", "number", "boolean"].includes(typeof value) ? String(value) : undefined;
   });
-  if (!order) return null;
-  const payment = order.payments[0] ?? null;
+  if (values.some((value) => value === undefined)) return false;
+  const expected = createHash("sha256").update(`${values.join("")}${timestamp}${secret}`).digest();
+  return timingSafeEqual(expected, Buffer.from(signature.checksum, "hex"));
+}
 
-  if (tx.status === "APPROVED") {
-    // Verificación extra: el monto aprobado debe ser el de la orden.
+export const eventSchema = z.object({
+  event: z.string().min(1).max(100),
+  environment: z.enum(["test", "prod"]),
+  data: z.record(z.string(), z.unknown()),
+  timestamp: z.number().int().nonnegative().safe(),
+  signature: z.object({
+    properties: z.array(z.string().min(1).max(200)).min(1).max(50),
+    checksum: z.string().regex(/^[a-f0-9]{64}$/i),
+  }),
+});
+
+/** El Host no interviene: el proveedor autenticado indica una referencia persistida. */
+export async function applyWompiWebhookTransaction(transaction: WompiTransaction) {
+  const context = await resolveWompiPaymentStore(transaction.reference);
+  return context ? runWithStoreContext(context, () => applyWompiTransaction(transaction)) : null;
+}
+
+/** Retorno/admin conservan la firma pública y el contexto de su tienda actual. */
+export async function applyWompiTransaction(
+  transaction: WompiTransaction,
+): Promise<{ code: string; status: string } | null> {
+  const parsed = transactionSchema.safeParse(transaction);
+  if (!parsed.success) throw new ApiError(400, "Transacción de Wompi inválida");
+  const paymentTx = parsed.data;
+  const { id: storeId } = await getStoreContext();
+  const result = await prisma.$transaction(async (db) => {
+    const match = await db.payment.findUnique({
+      where: { gatewayReference: paymentTx.reference, storeId, method: "WOMPI" }, select: { id: true, orderId: true, gatewayReference: true },
+    });
+    // La colación de MySQL puede ignorar mayúsculas; la referencia del proveedor es exacta.
+    if (!match || match.gatewayReference !== paymentTx.reference) return null;
+    // El pedido es el mismo mutex para webhook, retorno, reintento y admin.
+    await db.order.update({ where: { id: match.orderId, storeId }, data: { updatedAt: new Date() } });
+    const order = await db.order.findUniqueOrThrow({ where: { id: match.orderId, storeId } });
+    const payment = await db.payment.findUniqueOrThrow({ where: { id: match.id, storeId, orderId: order.id } });
     const expectedCents = Math.round(Number(order.total) * 100);
-    if (tx.amount_in_cents !== expectedCents || tx.currency !== CURRENCY) {
-      console.error(
-        `[wompi] monto no coincide en ${order.code}: esperado ${expectedCents}, llegó ${tx.amount_in_cents} ${tx.currency}`,
-      );
-      return { code: order.code, status: order.status };
+    if (paymentTx.currency !== CURRENCY || paymentTx.amount_in_cents !== expectedCents ||
+      paymentTx.amount_in_cents !== Math.round(Number(payment.amount) * 100)) {
+      throw new ApiError(409, "El importe o moneda del pago no coincide con el pedido");
     }
-    if (payment && payment.status !== "COMPLETED") {
-      await prisma.payment.update({
-        where: { id: payment.id },
-        // Se guarda el id de transacción de Wompi (y el medio real usado)
-        // como referencia para conciliar.
-        data: {
-          status: "COMPLETED",
-          reference: `${tx.id}${tx.payment_method_type ? ` (${tx.payment_method_type})` : ""}`,
-        },
+    if (payment.gatewayTransactionId && payment.gatewayTransactionId !== paymentTx.id) {
+      throw new ApiError(409, "El intento de pago ya pertenece a otra transacción");
+    }
+    if (payment.status === "COMPLETED") return { code: order.code, status: order.status, emailOrderId: null };
+    if (payment.status === "FAILED") {
+      if (paymentTx.status === "APPROVED") throw new ApiError(409, "El intento fallido requiere conciliación manual");
+      return { code: order.code, status: order.status, emailOrderId: null };
+    }
+    if (paymentTx.status === "APPROVED" && (order.status !== "PENDING" || order.inventoryRestoredAt)) {
+      throw new ApiError(409, "El pedido ya no admite este pago; requiere conciliación manual");
+    }
+    await db.payment.update({
+      where: { id: payment.id, storeId },
+      data: {
+        gatewayTransactionId: paymentTx.id,
+        reference: `${paymentTx.id}${paymentTx.payment_method_type ? ` (${paymentTx.payment_method_type})` : ""}`,
+        ...(paymentTx.status === "APPROVED" ? { status: "COMPLETED" } :
+          ["DECLINED", "VOIDED", "ERROR"].includes(paymentTx.status) ? { status: "FAILED" } : {}),
+      },
+    });
+    if (paymentTx.status === "APPROVED") {
+      await db.order.update({ where: { id: order.id, storeId }, data: { status: "PAID" } });
+      await db.orderStatusEvent.create({ data: { storeId, orderId: order.id, status: "PAID" } });
+      return { code: order.code, status: "PAID", emailOrderId: order.id };
+    }
+    if (["DECLINED", "VOIDED", "ERROR"].includes(paymentTx.status) && order.status === "PENDING") {
+      const others = await db.payment.count({
+        where: { storeId, orderId: order.id, status: { in: ["PENDING", "COMPLETED"] } },
       });
+      if (!others) {
+        await restockOrderOnce(order.id, db);
+        await db.order.update({ where: { id: order.id, storeId }, data: { status: "CANCELLED" } });
+        await db.orderStatusEvent.create({ data: { storeId, orderId: order.id, status: "CANCELLED" } });
+        return { code: order.code, status: "CANCELLED", emailOrderId: null };
+      }
     }
-    if (order.status === "PENDING") {
-      await prisma.order.update({ where: { id: order.id }, data: { status: "PAID" } });
-      await prisma.orderStatusEvent.create({
-        data: { orderId: order.id, status: "PAID" },
-      });
-      // Correo de confirmación recién cuando el pago está aprobado.
-      await sendOrderConfirmationEmail(order.id);
-    }
-    return { code: order.code, status: "PAID" };
+    return { code: order.code, status: order.status, emailOrderId: null };
+  }, { isolationLevel: "ReadCommitted", timeout: 15000 });
+  if (!result) return null;
+  if (result.emailOrderId) {
+    await sendOrderConfirmationEmail(result.emailOrderId).catch(() => console.error("[wompi] No se pudo enviar la confirmación del pedido"));
   }
-
-  if (tx.status === "DECLINED" || tx.status === "VOIDED" || tx.status === "ERROR") {
-    if (payment && payment.status === "PENDING") {
-      await prisma.payment.update({
-        where: { id: payment.id },
-        data: { status: "FAILED", reference: tx.id },
-      });
-    }
-    // Solo se cancela si seguía pendiente (nunca pisar una orden ya pagada).
-    if (order.status === "PENDING") {
-      await restockOrderOnce(order.id);
-      await prisma.order.update({
-        where: { id: order.id },
-        data: { status: "CANCELLED" },
-      });
-      await prisma.orderStatusEvent.create({
-        data: { orderId: order.id, status: "CANCELLED" },
-      });
-    }
-    return { code: order.code, status: "CANCELLED" };
-  }
-
-  // PENDING u otros estados intermedios: no se toca nada todavía.
-  return { code: order.code, status: order.status };
+  return { code: result.code, status: result.status };
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useStoreBrand } from "./store-brand-provider";
 import { useRouter } from "next/navigation";
 import {
   Menu,
@@ -10,6 +11,7 @@ import {
   LogOut,
   LayoutDashboard,
   UserCog,
+  Flame,
 } from "lucide-react";
 import { toast } from "sonner";
 import { buttonVariants } from "@/components/ui/button";
@@ -25,16 +27,23 @@ import {
 import { CategoryVisual } from "@/components/category-visual";
 import { LogoImage } from "@/components/layout/logo";
 import { api } from "@/lib/api-client";
+import {
+  type StoreBrand,
+} from "@/components/layout/store-brand";
 import type { HeaderUser } from "@/components/layout/user-menu";
 import type { Category } from "@/types";
 
 export function MobileNav({
   user,
   categories,
+  brand: suppliedBrand,
 }: {
   user?: HeaderUser | null;
   categories: Category[];
+  brand?: StoreBrand;
 }) {
+  const currentBrand = useStoreBrand();
+  const brand = suppliedBrand ?? currentBrand;
   const router = useRouter();
 
   const logout = async () => {
@@ -60,12 +69,15 @@ export function MobileNav({
         <Menu className="size-5" />
       </SheetTrigger>
       <SheetContent side="left" className="w-80 overflow-hidden p-0">
+        {/* Misma franja roja que remata la cabecera, para que el panel se lea
+            como parte de ella y no como una superficie aparte. */}
+        <div aria-hidden className="h-1 shrink-0 bg-brand" />
         <SheetHeader className="shrink-0 border-b border-border">
           {/* El logo real. Va como imagen y no como <Logo/>: el título del
               panel no debe ser un enlace, y ya hay uno al inicio en la cabecera. */}
           <SheetTitle>
-            <LogoImage className="h-8" />
-            <span className="sr-only">Variedades Los Primos</span>
+            <LogoImage brand={brand.logo} className="h-8" />
+            <span className="sr-only">{brand.name}</span>
           </SheetTitle>
         </SheetHeader>
 
@@ -139,12 +151,12 @@ export function MobileNav({
               nativeButton={false}
               render={
                 <Link
-                  href="/admin"
+                  href={user.platformAdmin ? "/platform" : "/admin"}
                   className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-semibold text-primary hover:bg-accent"
                 />
               }
             >
-              <LayoutDashboard className="size-4" /> Panel admin
+              <LayoutDashboard className="size-4" /> {user.platformAdmin ? "Administrar plataforma" : "Panel admin"}
             </SheetClose>
           )}
           {user && (
@@ -158,7 +170,22 @@ export function MobileNav({
         </div>
 
         <div className="px-3 pb-6">
-          <p className="px-3 pb-1 pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {/* El chip de ofertas de la barra de categorías se esconde por
+              debajo de `sm`, así que sin esto el móvil se quedaba sin ninguna
+              entrada a /deals. */}
+          <SheetClose
+            nativeButton={false}
+            render={
+              <Link
+                href="/deals"
+                className="mt-2 flex items-center gap-3 rounded-md bg-deal/15 px-3 py-2.5 text-sm font-semibold text-foreground hover:bg-deal hover:text-deal-foreground"
+              />
+            }
+          >
+            <Flame className="size-4" /> Mejores ofertas
+          </SheetClose>
+
+          <p className="px-3 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Categorías
           </p>
           <div className="flex flex-col gap-1">

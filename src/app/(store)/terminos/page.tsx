@@ -1,16 +1,20 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage, LegalSection } from "@/components/legal/legal-page";
-import { LEGAL_INFO } from "@/lib/legal-info";
+import { getStoreLegalInfo } from "@/lib/server/store-presentation";
 import { formatPrice } from "@/lib/format";
 import { FREE_SHIPPING_THRESHOLD, SHIPPING_COST } from "@/lib/shipping";
-
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   title: "Términos y Condiciones — Variedades Los Primos",
   description: "Condiciones de uso y compra en Variedades Los Primos.",
-};
+}, "/terminos");
+}
 
-export default function TerminosPage() {
+
+export default async function TerminosPage() {
+  const LEGAL_INFO = await getStoreLegalInfo();
   return (
     <LegalPage
       title="Términos y Condiciones"
@@ -23,8 +27,8 @@ export default function TerminosPage() {
           con domicilio en {LEGAL_INFO.ciudad}, Colombia. No contamos con punto
           físico de atención: toda la venta y el soporte son en línea. Puedes
           contactarnos en{" "}
-          <a href={`mailto:${LEGAL_INFO.correoContacto}`}>
-            {LEGAL_INFO.correoContacto}
+          <a href={LEGAL_INFO.contactHref}>
+            {LEGAL_INFO.correoContacto || "formulario de contacto"}
           </a>{" "}
           o desde nuestra página de{" "}
           <Link href="/contacto">contacto</Link>.

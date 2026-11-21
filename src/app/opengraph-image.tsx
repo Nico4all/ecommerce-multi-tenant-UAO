@@ -1,10 +1,13 @@
+import { getStoreSeo } from "@/lib/seo";
 import { ImageResponse } from "next/og";
 
-export const alt = "Variedades Los Primos — Tienda online en Colombia";
+export const alt = "Tienda online en Colombia";
+export const dynamic = "force-dynamic";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-export default function OpenGraphImage() {
+export default async function OpenGraphImage() {
+  const site = await getStoreSeo();
   return new ImageResponse(
     (
       <div
@@ -34,14 +37,14 @@ export default function OpenGraphImage() {
               fontWeight: 800,
             }}
           >
-            VP
+            {site.name.split(" ").filter(word => !["los", "del", "de"].includes(word.toLowerCase())).map(word => word[0]).join("").slice(0, 3)}
           </div>
           <div style={{ display: "flex", flexDirection: "column" }}>
             <div style={{ fontSize: 72, fontWeight: 800, letterSpacing: -3 }}>
-              Variedades Los Primos
+              {site.name}
             </div>
             <div style={{ marginTop: 12, fontSize: 34, color: "#3f6b56" }}>
-              Todo lo que buscas, en un solo lugar
+              {site.description}
             </div>
           </div>
         </div>
@@ -63,6 +66,6 @@ export default function OpenGraphImage() {
         </div>
       </div>
     ),
-    size,
+    { ...size, headers: { "Cache-Control": "private, no-store", Vary: "Host" } },
   );
 }

@@ -177,7 +177,7 @@ export function CategoriesManager({
                 </TableCell>
                 <TableCell className="text-right tabular-nums">{c.count}</TableCell>
                 <TableCell>
-                  <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                  <div className="flex items-center gap-1">
                     <button
                       onClick={() => openEdit(c)}
                       aria-label="Editar"

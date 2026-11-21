@@ -1,6 +1,5 @@
-import { ORIGINAL_STORE_ID } from "../../../prisma/stores";
 import "server-only";
-import { prisma } from "@/lib/prisma";
+import { prisma, getStoreContext } from "@/lib/prisma";
 import { toDomainProduct, PRODUCT_GALLERY_INCLUDE } from "./mappers";
 import type { Product } from "@/types";
 
@@ -43,13 +42,16 @@ export interface ProductDetail {
 export async function getProductDetail(
   slug: string,
 ): Promise<ProductDetail | null> {
+  const { id: storeId } = await getStoreContext();
   const row = await prisma.product.findUnique({
-    where: { storeId_slug: { storeId: ORIGINAL_STORE_ID, slug } },
+    where: { storeId_slug: { storeId, slug }, status: "PUBLISHED" },
     include: {
       ...PRODUCT_GALLERY_INCLUDE,
-      specs: { orderBy: { sortOrder: "asc" } },
-      variants: { orderBy: { sortOrder: "asc" } },
+      images: { ...PRODUCT_GALLERY_INCLUDE.images, where: { storeId } },
+      specs: { where: { storeId }, orderBy: { sortOrder: "asc" } },
+      variants: { where: { storeId }, orderBy: { sortOrder: "asc" } },
       reviews: {
+        where: { storeId },
         orderBy: { createdAt: "desc" },
         take: 10,
         include: { user: { select: { name: true } } },

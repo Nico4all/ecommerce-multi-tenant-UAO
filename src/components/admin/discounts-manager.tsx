@@ -222,7 +222,7 @@ export function DiscountsManager({ codes }: { codes: AdminDiscountRow[] }) {
                       <button
                         aria-label="Copiar código"
                         onClick={() => copyCode(d.code)}
-                        className="text-muted-foreground opacity-100 transition-opacity hover:text-primary sm:opacity-0 sm:group-hover:opacity-100"
+                        className="text-muted-foreground hover:text-primary"
                       >
                         <Copy className="size-3.5" />
                       </button>
@@ -253,7 +253,7 @@ export function DiscountsManager({ codes }: { codes: AdminDiscountRow[] }) {
                     {d.expiresAt ?? "—"}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={() => openEdit(d)}
                         aria-label="Editar"

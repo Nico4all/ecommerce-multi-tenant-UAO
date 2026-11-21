@@ -1,6 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
-import { hashPassword, verifyPassword } from "./auth";
+import { hashPassword, verifyPassword, requireUser } from "./auth";
 import { ApiError } from "./api-helpers";
 
 /**
@@ -40,6 +40,8 @@ export interface ProfileData {
 }
 
 export async function getProfile(userId: string): Promise<ProfileData | null> {
+  const session = await requireUser();
+  if (session.id !== userId) throw new ApiError(403, "Solo puedes consultar tu cuenta");
   const u = await prisma.user.findUnique({
     where: { id: userId },
     include: { addresses: { where: { isDefault: true }, take: 1 } },
@@ -51,7 +53,7 @@ export async function getProfile(userId: string): Promise<ProfileData | null> {
     name: u.name,
     email: u.email,
     phone: u.phone,
-    role: u.role as "ADMIN" | "CUSTOMER",
+    role: session.role,
     hasPassword: !!u.passwordHash,
     address: a
       ? {
@@ -70,6 +72,8 @@ export async function updateProfile(
   userId: string,
   input: ProfileInput,
 ): Promise<ProfileData> {
+  const session = await requireUser();
+  if (session.id !== userId) throw new ApiError(403, "Solo puedes cambiar tu cuenta");
   await prisma.user.update({
     where: { id: userId },
     data: { name: input.name.trim(), phone: input.phone?.trim() || null },
@@ -101,6 +105,8 @@ export async function changeOwnPassword(
   currentPassword: string | undefined,
   newPassword: string,
 ): Promise<void> {
+  const session = await requireUser();
+  if (session.id !== userId) throw new ApiError(403, "Solo puedes cambiar tu contraseña");
   const user = await prisma.user.findUnique({ where: { id: userId } });
   if (!user) throw new ApiError(404, "Usuario no encontrado");
 
@@ -111,8 +117,9 @@ export async function changeOwnPassword(
     if (!ok) throw new ApiError(400, "La contraseña actual no es correcta");
   }
 
-  await prisma.user.update({
-    where: { id: userId },
-    data: { passwordHash: await hashPassword(newPassword) },
+  const updated = await prisma.user.updateMany({
+    where: { id: userId, passwordHash: user.passwordHash, sessionVersion: user.sessionVersion },
+    data: { passwordHash: await hashPassword(newPassword), sessionVersion: { increment: 1 } },
   });
+  if (updated.count !== 1) throw new ApiError(409, "Tu cuenta cambió. Inicia sesión e intenta de nuevo.");
 }

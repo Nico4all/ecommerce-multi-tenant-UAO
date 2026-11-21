@@ -8,6 +8,7 @@ import {
 } from "@/lib/server/api-helpers";
 import { hashPassword, createSession } from "@/lib/server/auth";
 import { mergeGuestCart } from "@/lib/server/carts";
+import { ensureCustomerMembership } from "@/lib/server/memberships";
 
 const schema = z.object({
   name: z.string().trim().min(2, "Escribe tu nombre completo"),
@@ -27,23 +28,21 @@ export const POST = withErrorHandling(async (req: Request) => {
   const exists = await prisma.user.findUnique({ where: { email: body.email } });
   if (exists) throw new ApiError(409, "Ya existe una cuenta con ese correo");
 
-  const user = await prisma.user.create({
+  const passwordHash = await hashPassword(body.password);
+  const user = await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({
     data: {
       name: body.name,
       email: body.email,
-      passwordHash: await hashPassword(body.password),
+      passwordHash,
       role: "CUSTOMER",
       termsAcceptedAt: new Date(),
     },
+    });
+    await ensureCustomerMembership(user.id, tx);
+    return user;
   });
-
-  const session = {
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: "CUSTOMER" as const,
-  };
-  await createSession(session);
+  const session = await createSession(user);
   await mergeGuestCart(user.id);
 
   return jsonOk(session, { status: 201 });
