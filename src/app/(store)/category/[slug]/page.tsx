@@ -57,16 +57,23 @@ export default async function CategoryPage({
 
   return (
     <div className="mx-auto max-w-[1280px] px-4 py-6">
-      <Breadcrumbs items={[{ label: "Categorías", href: "/" }, { label: category.name }]} />
-      <h1 className="mb-5 font-heading text-2xl font-bold tracking-tight sm:text-3xl">
+      <Breadcrumbs items={[{ label: "Categorías", href: "/categories" }, { label: category.name }]} />
+      <h1 className="font-heading text-2xl font-bold tracking-tight sm:text-3xl">
         {category.name}
       </h1>
       {category.description && (
-        <p className="-mt-3 mb-5 max-w-3xl text-sm leading-relaxed text-muted-foreground">
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-muted-foreground">
           {category.description}
         </p>
       )}
-      <CatalogView products={products} brands={brands} />
+      <div className="mt-5">
+        <CatalogView
+          products={products}
+          brands={brands}
+          emptyTitle={`Todavía no hay productos en ${category.name}`}
+          emptyHint="Estamos surtiendo esta categoría. Mira las demás o busca por nombre."
+        />
+      </div>
     </div>
   );
 }

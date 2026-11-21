@@ -1,9 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { Percent, Tag, Search, Loader2 } from "lucide-react";
+import { Percent, Tag, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { SearchField } from "@/components/admin/search-field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -113,7 +114,7 @@ export function OffersManager({ products }: { products: AdminProductRow[] }) {
       <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Tag className="size-4 text-deal" /> Productos en oferta
+            <Tag className="size-4 text-deal-ink" /> Productos en oferta
           </div>
           <p className="mt-2 font-heading text-2xl font-bold tabular-nums">
             {active.length}
@@ -121,7 +122,7 @@ export function OffersManager({ products }: { products: AdminProductRow[] }) {
         </div>
         <div className="rounded-xl border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Percent className="size-4 text-deal" /> Descuento promedio
+            <Percent className="size-4 text-deal-ink" /> Descuento promedio
           </div>
           <p className="mt-2 font-heading text-2xl font-bold tabular-nums">
             {avgDiscount}%
@@ -139,15 +140,13 @@ export function OffersManager({ products }: { products: AdminProductRow[] }) {
 
       <div className="rounded-xl border border-border bg-card">
         <div className="p-4">
-          <div className="flex h-9 max-w-md items-center rounded-md border border-border bg-background px-3">
-            <Search className="size-4 text-muted-foreground" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Buscar producto…"
-              className="h-full flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground"
-            />
-          </div>
+          <SearchField
+            label="Buscar productos para poner en oferta"
+            placeholder="Buscar producto…"
+            value={q}
+            onChange={setQ}
+            className="max-w-md"
+          />
         </div>
 
         <div className="overflow-x-auto border-t border-border">
@@ -202,7 +201,7 @@ export function OffersManager({ products }: { products: AdminProductRow[] }) {
                     </TableCell>
                     <TableCell className="text-right">
                       {st.offerActive ? (
-                        <span className="font-semibold text-deal tabular-nums">
+                        <span className="font-semibold text-deal-ink tabular-nums">
                           -{pct}%
                         </span>
                       ) : (

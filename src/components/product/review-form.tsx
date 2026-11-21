@@ -96,14 +96,15 @@ export function ReviewForm({
             onClick={() => setRating(n)}
             onMouseEnter={() => setHovered(n)}
             onMouseLeave={() => setHovered(0)}
-            className="p-0.5"
+            className="rounded-sm p-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Star
+              aria-hidden
               className={cn(
                 "size-7 transition-colors",
                 n <= (hovered || rating)
-                  ? "fill-amber-400 text-amber-400"
-                  : "fill-muted text-muted-foreground/40",
+                  ? "fill-deal-ink text-deal-ink"
+                  : "fill-muted text-muted-foreground/60",
               )}
             />
           </button>

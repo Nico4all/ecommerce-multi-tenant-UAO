@@ -3,19 +3,22 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { User, Mail, Lock, Eye, EyeOff, ArrowRight, Loader2, AlertCircle } from "lucide-react";
+import { User, Mail, ArrowRight, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { AuthCard, AuthError, AuthHeading } from "@/components/auth/auth-card";
+import { PasswordField } from "@/components/auth/password-field";
+import { GoogleSignIn } from "@/components/auth/google-sign-in";
+import { DEFAULT_STORE_BRAND } from "@/components/layout/store-brand";
 import { api, ApiClientError } from "@/lib/api-client";
 
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next");
-  const [show, setShow] = React.useState(false);
   const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -51,134 +54,131 @@ function RegisterForm() {
   };
 
   return (
-    <div className="w-full max-w-sm">
-      <div className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
-        <div className="mb-6 text-center">
-          <h1 className="font-heading text-2xl font-bold tracking-tight">
-            Crear cuenta
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Únete a Variedades Los Primos en segundos
+    <AuthCard
+      footer={
+        <>
+          ¿Ya tienes cuenta?{" "}
+          <Link
+            href={`/login${next ? `?next=${encodeURIComponent(next)}` : ""}`}
+            className="rounded-sm font-semibold text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Iniciar sesión
+          </Link>
+        </>
+      }
+    >
+      <AuthHeading
+        title="Crear cuenta"
+        description={`Únete a ${DEFAULT_STORE_BRAND.name} en segundos`}
+      />
+
+      {/* Sin ruta OAuth en el proyecto esto no pinta nada. Ver el componente. */}
+      <GoogleSignIn next={next} label="Registrarme con Google" />
+
+      <form className="space-y-4" onSubmit={onSubmit}>
+        {error && <AuthError>{error}</AuthError>}
+
+        <div className="space-y-1.5">
+          <Label htmlFor="name">Nombre completo</Label>
+          <div className="relative">
+            <User
+              aria-hidden
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              id="name"
+              required
+              autoComplete="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Tu nombre"
+              className="h-11 pl-9"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="email">Correo electrónico</Label>
+          <div className="relative">
+            <Mail
+              aria-hidden
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              id="email"
+              type="email"
+              required
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="tu@correo.com"
+              className="h-11 pl-9"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="password">Contraseña</Label>
+          {/* El mínimo ya se anunciaba en el texto de ayuda pero no se
+              comprobaba hasta llegar al servidor: el cliente escribía cuatro
+              letras, enviaba y recibía un error. `minLength` lo avisa antes.
+              El servidor sigue revalidando por su cuenta. */}
+          <PasswordField
+            id="password"
+            required
+            minLength={8}
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            aria-describedby="password-hint"
+          />
+          <p id="password-hint" className="text-xs text-muted-foreground">
+            Mínimo 8 caracteres.
           </p>
         </div>
 
-        <form className="space-y-4" onSubmit={onSubmit}>
-          {error && (
-            <p
-              role="alert"
-              className="flex items-start gap-2 rounded-md bg-destructive/10 p-2.5 text-sm text-destructive"
+        <label className="flex items-start gap-2 text-sm">
+          <Checkbox
+            id="terms"
+            checked={terms}
+            onCheckedChange={(v) => setTerms(v === true)}
+            className="mt-0.5"
+          />
+          <span className="text-muted-foreground">
+            Acepto los{" "}
+            <Link
+              href="/terminos"
+              target="_blank"
+              className="rounded-sm text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <AlertCircle className="mt-0.5 size-4 shrink-0" />
-              {error}
-            </p>
+              Términos
+            </Link>{" "}
+            y la{" "}
+            <Link
+              href="/datos-personales"
+              target="_blank"
+              className="rounded-sm text-primary outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Política de datos personales
+            </Link>
+          </span>
+        </label>
+
+        <Button type="submit" disabled={loading} className="h-11 w-full gap-2 text-base">
+          {loading ? (
+            <>
+              <Loader2 className="size-5 animate-spin" /> Creando cuenta…
+            </>
+          ) : (
+            <>
+              Crear cuenta
+              <ArrowRight className="size-5" />
+            </>
           )}
-
-          <div className="space-y-1.5">
-            <Label htmlFor="name">Nombre completo</Label>
-            <div className="relative">
-              <User className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="name"
-                required
-                autoComplete="name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Tu nombre"
-                className="h-11 pl-9"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="email">Correo electrónico</Label>
-            <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="email"
-                type="email"
-                required
-                autoComplete="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="tu@correo.com"
-                className="h-11 pl-9"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="password">Contraseña</Label>
-            <div className="relative">
-              <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                id="password"
-                type={show ? "text" : "password"}
-                required
-                autoComplete="new-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Mínimo 8 caracteres"
-                className="h-11 px-9"
-              />
-              <button
-                type="button"
-                onClick={() => setShow((s) => !s)}
-                aria-label={show ? "Ocultar contraseña" : "Mostrar contraseña"}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-              </button>
-            </div>
-          </div>
-
-          <label className="flex items-start gap-2 text-sm">
-            <Checkbox
-              id="terms"
-              checked={terms}
-              onCheckedChange={(v) => setTerms(v === true)}
-              className="mt-0.5"
-            />
-            <span className="text-muted-foreground">
-              Acepto los{" "}
-              <Link href="/terminos" target="_blank" className="text-primary hover:underline">
-                Términos
-              </Link>{" "}
-              y la{" "}
-              <Link
-                href="/datos-personales"
-                target="_blank"
-                className="text-primary hover:underline"
-              >
-                Política de datos personales
-              </Link>
-            </span>
-          </label>
-
-          <Button type="submit" disabled={loading} className="h-11 w-full gap-2 text-base">
-            {loading ? (
-              <>
-                <Loader2 className="size-5 animate-spin" /> Creando cuenta…
-              </>
-            ) : (
-              <>
-                Crear cuenta
-                <ArrowRight className="size-5" />
-              </>
-            )}
-          </Button>
-        </form>
-      </div>
-
-      <p className="mt-4 text-center text-sm text-muted-foreground">
-        ¿Ya tienes cuenta?{" "}
-        <Link
-          href={`/login${next ? `?next=${encodeURIComponent(next)}` : ""}`}
-          className="font-semibold text-primary hover:underline"
-        >
-          Iniciar sesión
-        </Link>
-      </p>
-    </div>
+        </Button>
+      </form>
+    </AuthCard>
   );
 }
 

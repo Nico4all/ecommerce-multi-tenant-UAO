@@ -9,19 +9,36 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getSession } from "@/lib/server/auth";
 import { getCartCount } from "@/lib/server/carts";
+import {
+  DEFAULT_STORE_BRAND,
+  type StoreBrand,
+} from "@/components/layout/store-brand";
 import type { Category } from "@/types";
 
-export async function Header({ categories }: { categories: Category[] }) {
+/**
+ * Fila principal de la cabecera.
+ *
+ * Va sobre `bg-card` (blanco) y no sobre el fondo crema de la página: así la
+ * cabecera se separa del contenido sin necesidad de sombra, y el crema queda
+ * para el lienzo, que es el reparto que pide el manual.
+ */
+export async function Header({
+  categories,
+  brand = DEFAULT_STORE_BRAND,
+}: {
+  categories: Category[];
+  brand?: StoreBrand;
+}) {
   const [session, cartCount] = await Promise.all([
     getSession(),
     getCartCount().catch(() => 0),
   ]);
 
   return (
-    <div className="border-b border-border bg-background">
+    <div className="border-b border-border bg-card">
       <div className="mx-auto flex h-16 max-w-[1280px] items-center gap-3 px-4">
-        <MobileNav user={session} categories={categories} />
-        <Logo />
+        <MobileNav user={session} categories={categories} brand={brand} />
+        <Logo brand={brand.logo} />
 
         <div className="mx-2 hidden flex-1 md:block">
           <SearchBar />
@@ -35,7 +52,7 @@ export async function Header({ categories }: { categories: Category[] }) {
             aria-label="Favoritos"
             className={cn(
               buttonVariants({ variant: "ghost", size: "icon" }),
-              "hidden sm:inline-flex",
+              "hidden h-10 w-10 sm:inline-flex",
             )}
           >
             <Heart className="size-5" />
@@ -56,6 +73,8 @@ export async function Header({ categories }: { categories: Category[] }) {
             <span className="relative">
               <ShoppingCart className="size-5" />
               {cartCount > 0 && (
+                // El contador va en el acento naranja con tinta oscura (8.6:1).
+                // En rojo dominante, a 10px, el blanco no llegaría a 4.5:1.
                 <span className="absolute -right-2 -top-2 grid size-4 min-w-4 place-items-center rounded-full bg-deal px-1 text-[10px] font-bold text-deal-foreground tabular-nums">
                   {cartCount > 99 ? "99+" : cartCount}
                 </span>

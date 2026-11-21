@@ -10,6 +10,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { ProductImage } from "@/components/product/product-image";
 import { RatingStars } from "@/components/product/rating-stars";
 import { PriceTag } from "@/components/product/price-tag";
+import { EmptyState } from "@/components/catalog/product-grid";
 import { api, ApiClientError } from "@/lib/api-client";
 import type { Product } from "@/types";
 
@@ -18,6 +19,16 @@ export function WishlistView({ initial }: { initial: Product[] }) {
   const [items, setItems] = React.useState<Product[]>(initial);
   const [added, setAdded] = React.useState<Record<string, boolean>>({});
   const [busy, setBusy] = React.useState<string | null>(null);
+  // Los avisos de "Agregado" se apagan solos a los 1,8 s. Si el cliente se va
+  // de la pagina antes, el temporizador seguia vivo e intentaba tocar estado
+  // de un componente ya desmontado.
+  const timers = React.useRef<ReturnType<typeof setTimeout>[]>([]);
+  React.useEffect(
+    () => () => {
+      timers.current.forEach(clearTimeout);
+    },
+    [],
+  );
 
   const remove = async (p: Product) => {
     setBusy(p.id);
@@ -37,7 +48,9 @@ export function WishlistView({ initial }: { initial: Product[] }) {
     try {
       await api.post("/api/cart/items", { productId: p.id, qty: 1 });
       setAdded((a) => ({ ...a, [p.id]: true }));
-      setTimeout(() => setAdded((a) => ({ ...a, [p.id]: false })), 1800);
+      timers.current.push(
+        setTimeout(() => setAdded((a) => ({ ...a, [p.id]: false })), 1800),
+      );
       toast.success("Agregado al carrito");
       router.refresh();
     } catch (e) {
@@ -71,25 +84,23 @@ export function WishlistView({ initial }: { initial: Product[] }) {
 
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-20 text-center">
-        <Heart className="size-12 text-muted-foreground/50" strokeWidth={1.25} />
-        <h2 className="mt-4 font-heading text-xl font-semibold">
-          Tu lista de favoritos está vacía
-        </h2>
-        <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-          Guarda productos con el corazón para encontrarlos aquí más tarde.
-        </p>
-        <Link href="/" className={cn(buttonVariants(), "mt-5")}>
-          Descubrir productos
-        </Link>
-      </div>
+      <EmptyState
+        icon={Heart}
+        title="Tu lista de favoritos está vacía"
+        hint="Guarda productos con el corazón para encontrarlos aquí más tarde."
+        action={
+          <Link href="/" className={cn(buttonVariants())}>
+            Descubrir productos
+          </Link>
+        }
+      />
     );
   }
 
   return (
     <div>
       <div className="mb-4 flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
+        <p aria-live="polite" className="text-sm text-muted-foreground">
           <span className="font-semibold text-foreground tabular-nums">
             {items.length}
           </span>{" "}
@@ -124,7 +135,7 @@ export function WishlistView({ initial }: { initial: Product[] }) {
               onClick={() => remove(p)}
               disabled={busy !== null}
               aria-label={`Quitar ${p.name} de favoritos`}
-              className="absolute right-4 top-4 z-10 grid size-8 place-items-center rounded-full bg-background/80 text-muted-foreground backdrop-blur transition-colors hover:text-destructive"
+              className="absolute right-4 top-4 z-10 grid size-8 place-items-center rounded-full bg-background/80 text-muted-foreground outline-none backdrop-blur transition-colors hover:text-destructive focus-visible:ring-2 focus-visible:ring-ring"
             >
               <X className="size-4" />
             </button>

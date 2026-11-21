@@ -27,7 +27,7 @@ export function CategoryNav({ categories }: { categories: Category[] }) {
   const pathname = usePathname();
 
   return (
-    <div className="border-b border-border bg-background">
+    <div className="border-b border-border bg-card">
       <div className="mx-auto flex max-w-[1280px] items-center gap-2 px-4">
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -82,9 +82,13 @@ export function CategoryNav({ categories }: { categories: Category[] }) {
           </DropdownMenuContent>
         </DropdownMenu>
 
+        {/* A partir de `sm` el chip de ofertas recorta la tira y la última
+            categoría queda partida a media palabra, que se lee como un fallo.
+            El degradado la desvanece contra el borde, que es como se señala
+            que hay más contenido al que desplazarse. */}
         <nav
           aria-label="Categorías destacadas"
-          className="no-scrollbar flex flex-1 items-center gap-1 overflow-x-auto"
+          className="no-scrollbar flex flex-1 items-center gap-1 overflow-x-auto sm:[mask-image:linear-gradient(to_right,#000_calc(100%-2.5rem),transparent)]"
         >
           {categories.map((c) => {
             const href = `/category/${c.slug}`;
@@ -95,9 +99,12 @@ export function CategoryNav({ categories }: { categories: Category[] }) {
                 href={href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
+                  // El subrayado activo es el rojo dominante: ahí es un
+                  // elemento gráfico, así que le basta con 3:1. La etiqueta en
+                  // cambio va en el subordinado, que sí llega a 4.5:1.
                   "whitespace-nowrap border-b-2 px-3 py-3 text-sm transition-colors",
                   active
-                    ? "border-primary font-medium text-primary"
+                    ? "border-brand font-semibold text-primary"
                     : "border-transparent text-muted-foreground hover:text-foreground",
                 )}
               >
@@ -107,11 +114,16 @@ export function CategoryNav({ categories }: { categories: Category[] }) {
           })}
         </nav>
 
+        {/* Antes era texto en el color de ofertas, que sobre fondo claro se
+            queda en 2.2:1. Como chip relleno, la tinta oscura sobre el naranja
+            llega a 8.6:1 y además destaca más. */}
         <Link
           href="/deals"
           className={cn(
-            "ml-auto hidden shrink-0 items-center gap-1.5 py-3 pl-3 text-sm font-semibold sm:flex",
-            pathname === "/deals" ? "text-deal" : "text-deal/90 hover:text-deal",
+            "ml-auto hidden shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold transition-colors sm:flex",
+            pathname === "/deals"
+              ? "bg-deal text-deal-foreground"
+              : "bg-deal/15 text-foreground hover:bg-deal hover:text-deal-foreground",
           )}
         >
           <Flame className="size-4" />

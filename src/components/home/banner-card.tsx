@@ -10,6 +10,12 @@ import type { Banner } from "@/types";
  * - Si el banner tiene `imageUrl`, la imagen es el fondo; si no, se usa su gradiente.
  * - Texto y botón son opcionales: un banner puede ser solo la imagen. La tarjeta
  *   entera es el enlace, así que sin botón el clic sigue llevando al destino.
+ *
+ * Los colores del degradado los elige el administrador y llegan como dato en
+ * `banner.className`: aquí no se sobrescriben. Lo que sí sale de tokens es todo
+ * lo que esta tarjeta pone de su parte (marcador de carga, texto sobre la foto
+ * y chip del botón), con `--media`, que es fijo en los dos temas porque
+ * siempre se apoya sobre media oscura.
  */
 export function BannerCard({
   banner,
@@ -29,9 +35,13 @@ export function BannerCard({
       // El título es el nombre accesible; sin texto, lo da el destino del enlace.
       aria-label={hasText ? undefined : `Ver ${banner.href}`}
       className={cn(
-        "group relative flex flex-col justify-between overflow-hidden rounded-xl shadow-sm transition-shadow hover:shadow-md",
+        // La tarjeta entera es el enlace, así que necesita foco visible: sin
+        // él, quien navega con teclado no sabe dónde está.
+        "group relative flex flex-col justify-between overflow-hidden rounded-xl shadow-sm outline-none transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
         size === "sm" ? "p-4" : "p-5 sm:p-6",
-        hasImage ? "bg-slate-900 text-white" : banner.className,
+        // Tinta cálida mientras la imagen carga o si la URL falla: antes era un
+        // slate frío, ajeno a la paleta, y se veía en cada primera carga.
+        hasImage ? "bg-media-foreground text-media" : banner.className,
         className,
       )}
     >
@@ -60,7 +70,7 @@ export function BannerCard({
           {banner.highlight && (
             <span
               className={cn(
-                "inline-block font-heading font-extrabold leading-none drop-shadow-sm",
+                "inline-block font-heading font-extrabold leading-none tracking-tight drop-shadow-sm",
                 size === "lg" && "text-3xl sm:text-4xl lg:text-5xl",
                 size === "md" && "text-2xl sm:text-3xl",
                 size === "sm" && "text-xl",
@@ -84,7 +94,7 @@ export function BannerCard({
           {banner.subtitle && (
             <p
               className={cn(
-                "mt-1 max-w-[30ch] text-white/90",
+                "mt-1 max-w-[30ch] opacity-90",
                 size === "lg" && "text-base",
                 size === "md" && "text-sm",
                 size === "sm" && "line-clamp-1 text-xs",
@@ -99,7 +109,7 @@ export function BannerCard({
       {banner.cta && (
         <span
           className={cn(
-            "relative inline-flex w-fit items-center gap-1.5 rounded-full bg-white/95 font-semibold text-slate-900 transition-transform group-hover:translate-x-0.5",
+            "relative inline-flex w-fit items-center gap-1.5 rounded-full bg-media font-semibold text-media-foreground transition-transform group-hover:translate-x-0.5",
             size === "sm" ? "mt-2 px-3 py-1 text-xs" : "mt-4 px-4 py-2 text-sm",
           )}
         >

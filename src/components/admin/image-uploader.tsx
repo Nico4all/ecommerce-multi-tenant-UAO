@@ -141,7 +141,7 @@ export function ImageUploader({
             type="button"
             onClick={clear}
             aria-label="Quitar imagen"
-            className="absolute right-2 top-2 grid size-7 place-items-center rounded-full bg-black/60 text-white opacity-100 transition-opacity hover:bg-black/80 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100"
+            className="absolute right-2 top-2 grid size-7 place-items-center rounded-full bg-black/60 text-white hover:bg-black/80"
           >
             <X className="size-4" />
           </button>

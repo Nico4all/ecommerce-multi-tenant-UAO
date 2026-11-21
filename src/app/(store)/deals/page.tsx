@@ -29,7 +29,12 @@ export default async function DealsPage() {
           Los mayores descuentos de Variedades Los Primos, actualizados cada día.
         </p>
       </div>
-      <CatalogView products={products} brands={brands} />
+      <CatalogView
+        products={products}
+        brands={brands}
+        emptyTitle="Ahora mismo no hay ofertas"
+        emptyHint="Vuelve pronto: los descuentos se actualizan cada día."
+      />
     </div>
   );
 }

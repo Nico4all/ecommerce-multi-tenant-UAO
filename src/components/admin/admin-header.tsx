@@ -41,7 +41,7 @@ export function AdminHeader({
           <SheetHeader className="h-14 shrink-0 flex-row items-center gap-2 border-b border-border">
             <LogoImage className="h-6" />
             <SheetTitle className="font-heading text-sm text-muted-foreground">
-              Panel admin
+              Secciones del panel
             </SheetTitle>
           </SheetHeader>
           {/* Con 13 secciones el menú no cabía en pantallas cortas y no había
@@ -53,20 +53,26 @@ export function AdminHeader({
       </Sheet>
 
       {/* Buscador global */}
-      <AdminSearch className="max-w-md flex-1" />
+      {/* min-w-0: sin esto el campo no se deja encoger por debajo de su
+          contenido y a 360px empujaba el perfil y las notificaciones fuera
+          de la pantalla. */}
+      <AdminSearch className="min-w-0 max-w-md flex-1" />
 
       <div className="ml-auto flex items-center gap-1">
         <ThemeToggle />
         <NotificationBell initial={notifications} />
         <Link
           href="/admin/perfil"
-          aria-label="Mi perfil"
-          className="ml-1 flex items-center gap-2 rounded-full border border-border py-1 pl-1 pr-3 transition-colors hover:bg-accent"
+          aria-label={`Mi perfil (${adminName})`}
+          className="ml-1 flex items-center gap-2 rounded-full border border-border py-1 pl-1 pr-3 outline-none transition-colors hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <span className="grid size-7 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary">
+          <span
+            aria-hidden
+            className="grid size-7 place-items-center rounded-full bg-primary/15 text-xs font-bold text-primary"
+          >
             {adminName.slice(0, 2).toUpperCase()}
           </span>
-          <span className="hidden max-w-32 truncate text-sm font-medium sm:block">
+          <span aria-hidden className="hidden max-w-32 truncate text-sm font-medium sm:block">
             {adminName.split(" ")[0]}
           </span>
         </Link>

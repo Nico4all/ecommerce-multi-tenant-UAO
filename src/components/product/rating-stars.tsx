@@ -18,16 +18,22 @@ export function RatingStars({
         role="img"
         aria-label={`Calificación ${rating} de 5`}
       >
+        {/* La estrella llena iba en ámbar de Tailwind: 1.67:1 sobre blanco
+            y 1.54:1 sobre crema, cuando 1.4.11 pide 3:1 para un gráfico que
+            transmite información. Pasa a la tinta del acento naranja del
+            manual: 5.15:1 sobre blanco, 4.75:1 sobre crema y 8.87:1 en modo
+            oscuro, donde la tinta vuelve a ser el acento. */}
         {Array.from({ length: 5 }).map((_, i) => {
           const filled = i + 1 <= Math.round(rating);
           return (
             <Star
               key={i}
+              aria-hidden
               className={cn(
                 "size-3.5",
                 filled
-                  ? "fill-amber-400 text-amber-400"
-                  : "fill-muted text-muted-foreground/40",
+                  ? "fill-deal-ink text-deal-ink"
+                  : "fill-muted text-muted-foreground/60",
               )}
             />
           );

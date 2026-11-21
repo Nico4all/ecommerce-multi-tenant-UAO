@@ -1,5 +1,9 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import {
+  DEFAULT_STORE_BRAND,
+  type BrandAsset,
+} from "@/components/layout/store-brand";
 
 /**
  * Marca desacoplada.
@@ -19,23 +23,13 @@ import { cn } from "@/lib/utils";
  * cuando los degradados dejan de pintarse.
  */
 
-export type BrandAsset = {
-  /** Ruta pública del activo. */
-  src: string;
-  /** Nombre del comercio; se usa como texto alternativo. */
-  alt: string;
-  /** Dimensiones reales del archivo, para reservar el hueco mientras carga. */
-  width: number;
-  height: number;
-};
+export type { BrandAsset };
 
-/** Marca comercial de la tienda activa. */
-export const STORE_BRAND: BrandAsset = {
-  src: "/logo-variedades-los-primos.svg",
-  alt: "Variedades Los Primos",
-  width: 640,
-  height: 150,
-};
+/**
+ * Logotipo de la tienda por defecto. Se mantiene como export propio porque es
+ * el que usan los componentes que no reciben marca por prop.
+ */
+export const STORE_BRAND: BrandAsset = DEFAULT_STORE_BRAND.logo;
 
 /**
  * Activo autorizado de la marca institucional.

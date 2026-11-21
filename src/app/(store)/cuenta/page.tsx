@@ -18,21 +18,37 @@ export default async function AccountPage() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6">
-      <h1 className="mb-1 font-heading text-2xl font-bold tracking-tight sm:text-3xl">
+      {/* Mismo remate rojo que encabeza el resto de la tienda. */}
+      <h1 className="flex items-center gap-3 font-heading text-2xl font-bold tracking-tight sm:text-3xl">
+        <span aria-hidden className="h-7 w-1 shrink-0 rounded-full bg-brand" />
         Mi cuenta
       </h1>
-      <p className="mb-6 text-sm text-muted-foreground">
+      <p className="mb-6 mt-1 pl-4 text-sm text-muted-foreground">
         Actualiza tus datos y tu contraseña.
       </p>
 
       <div className="space-y-4">
-        <section className="rounded-xl border border-border bg-card p-5 sm:p-6">
-          <h2 className="mb-4 font-heading font-semibold">Datos personales</h2>
+        {/* Las secciones llevan nombre accesible: al navegar por regiones,
+            "sección" a secas no decía de cuál. El título ya no se llama
+            "Datos personales": así se llama la política legal de la tienda,
+            y aquí lo que hay son los datos de contacto y envío. */}
+        <section
+          aria-labelledby="cuenta-datos"
+          className="rounded-xl border border-border bg-card p-5 sm:p-6"
+        >
+          <h2 id="cuenta-datos" className="mb-4 font-heading font-semibold">
+            Datos de contacto y envío
+          </h2>
           <ProfileForm profile={profile} />
         </section>
 
-        <section className="rounded-xl border border-border bg-card p-5 sm:p-6">
-          <h2 className="mb-1 font-heading font-semibold">Contraseña</h2>
+        <section
+          aria-labelledby="cuenta-clave"
+          className="rounded-xl border border-border bg-card p-5 sm:p-6"
+        >
+          <h2 id="cuenta-clave" className="mb-1 font-heading font-semibold">
+            Contraseña
+          </h2>
           <p className="mb-4 text-sm text-muted-foreground">
             {profile.hasPassword
               ? "Cambia tu contraseña cuando quieras."

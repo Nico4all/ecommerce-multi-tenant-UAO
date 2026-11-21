@@ -11,7 +11,9 @@ export default async function CartPage() {
 
   return (
     <div className="mx-auto max-w-[1280px] px-4 py-6">
-      <h1 className="mb-6 font-heading text-2xl font-bold tracking-tight sm:text-3xl">
+      {/* Mismo remate rojo que encabeza el resto de la tienda. */}
+      <h1 className="mb-6 flex items-center gap-3 font-heading text-2xl font-bold tracking-tight sm:text-3xl">
+        <span aria-hidden className="h-7 w-1 shrink-0 rounded-full bg-brand" />
         Carrito de compras
       </h1>
       <CartView cart={cart} />

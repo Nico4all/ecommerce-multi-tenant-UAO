@@ -4,13 +4,15 @@ import { redirect } from "next/navigation";
 import { ShoppingBag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
+import { EmptyState } from "@/components/catalog/product-grid";
 import { getCart } from "@/lib/server/carts";
 import { getSession } from "@/lib/server/auth";
 import { getProfile } from "@/lib/server/account";
 import { CheckoutForm } from "@/components/checkout/checkout-form";
+import { SITE_NAME } from "@/lib/seo";
 
 export const metadata: Metadata = {
-  title: "Finalizar compra — Variedades Los Primos",
+  title: `Finalizar compra — ${SITE_NAME}`,
 };
 
 export default async function CheckoutPage() {
@@ -27,22 +29,22 @@ export default async function CheckoutPage() {
 
   return (
     <div className="mx-auto max-w-[1280px] px-4 py-6">
-      <h1 className="mb-6 font-heading text-2xl font-bold tracking-tight sm:text-3xl">
+      {/* Mismo remate rojo que encabeza el resto de la tienda. */}
+      <h1 className="mb-6 flex items-center gap-3 font-heading text-2xl font-bold tracking-tight sm:text-3xl">
+        <span aria-hidden className="h-7 w-1 shrink-0 rounded-full bg-brand" />
         Finalizar compra
       </h1>
       {cart.lines.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-20 text-center">
-          <ShoppingBag className="size-12 text-muted-foreground/50" strokeWidth={1.25} />
-          <h2 className="mt-4 font-heading text-xl font-semibold">
-            No hay nada que pagar todavía
-          </h2>
-          <p className="mt-1 max-w-xs text-sm text-muted-foreground">
-            Agrega productos al carrito y vuelve aquí para completar tu compra.
-          </p>
-          <Link href="/" className={cn(buttonVariants(), "mt-5")}>
-            Ir a la tienda
-          </Link>
-        </div>
+        <EmptyState
+          icon={ShoppingBag}
+          title="No hay nada que pagar todavía"
+          hint="Agrega productos al carrito y vuelve aquí para completar tu compra."
+          action={
+            <Link href="/" className={cn(buttonVariants())}>
+              Ir a la tienda
+            </Link>
+          }
+        />
       ) : (
         <CheckoutForm
           cart={cart}
