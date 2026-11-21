@@ -1,15 +1,19 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage, LegalSection } from "@/components/legal/legal-page";
-import { LEGAL_INFO } from "@/lib/legal-info";
-
-export const metadata: Metadata = {
+import { getStoreLegalInfo } from "@/lib/server/store-presentation";
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   title: "Política de Tratamiento de Datos Personales — Variedades Los Primos",
   description:
     "Cómo tratamos tus datos personales, conforme a la Ley 1581 de 2012 (Habeas Data).",
-};
+}, "/datos-personales");
+}
 
-export default function DatosPersonalesPage() {
+
+export default async function DatosPersonalesPage() {
+  const LEGAL_INFO = await getStoreLegalInfo();
   return (
     <LegalPage
       title="Política de Tratamiento de Datos Personales"
@@ -21,8 +25,8 @@ export default function DatosPersonalesPage() {
           <strong>{LEGAL_INFO.nombreComercial}</strong>, con domicilio en{" "}
           {LEGAL_INFO.ciudad}, Colombia, es el responsable del tratamiento de
           tus datos personales. Puedes escribirnos a{" "}
-          <a href={`mailto:${LEGAL_INFO.correoDatos}`}>
-            {LEGAL_INFO.correoDatos}
+          <a href={LEGAL_INFO.dataHref}>
+            {LEGAL_INFO.correoDatos || "formulario de contacto"}
           </a>{" "}
           para cualquier consulta o solicitud sobre tus datos.
         </p>
@@ -131,8 +135,8 @@ export default function DatosPersonalesPage() {
       <LegalSection id="ejercer-derechos" title="6. Cómo ejercer estos derechos">
         <p>
           Escríbenos a{" "}
-          <a href={`mailto:${LEGAL_INFO.correoDatos}`}>
-            {LEGAL_INFO.correoDatos}
+          <a href={LEGAL_INFO.dataHref}>
+            {LEGAL_INFO.correoDatos || "formulario de contacto"}
           </a>{" "}
           o radica una{" "}
           <Link href="/pqr">PQR</Link> contándonos qué necesitas (consultar,

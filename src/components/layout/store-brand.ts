@@ -1,13 +1,8 @@
 /**
  * Identidad de la tienda activa.
  *
- * La plataforma es multi-tienda, pero la resolución de tienda vive en el
- * backend y todavía no está integrada en la UI. Para no acoplar la capa visual
- * a un contrato que aún no existe, la identidad viaja como prop desde
- * `src/app/(store)/layout.tsx` y aquí sólo queda el valor por defecto.
- *
- * Cuando exista resolución de tienda, el único punto que cambia es ese layout:
- * ningún componente de cabecera o pie conoce de dónde sale la marca.
+ * El servidor resuelve la tienda y entrega una proyección pública al provider
+ * y a los layouts. Los componentes visuales conservan el contrato de marca.
  *
  * El sistema de color NO forma parte de la marca: es el de A01, común a todas
  * las tiendas, y es lo que da la experiencia visual coherente. Lo que varía por

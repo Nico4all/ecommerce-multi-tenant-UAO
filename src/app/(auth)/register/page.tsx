@@ -12,10 +12,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { AuthCard, AuthError, AuthHeading } from "@/components/auth/auth-card";
 import { PasswordField } from "@/components/auth/password-field";
 import { GoogleSignIn } from "@/components/auth/google-sign-in";
-import { DEFAULT_STORE_BRAND } from "@/components/layout/store-brand";
+import { useStoreBrand } from "@/components/layout/store-brand-provider";
 import { api, ApiClientError } from "@/lib/api-client";
 
 function RegisterForm() {
+  const brand = useStoreBrand();
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next");
@@ -69,7 +70,7 @@ function RegisterForm() {
     >
       <AuthHeading
         title="Crear cuenta"
-        description={`Únete a ${DEFAULT_STORE_BRAND.name} en segundos`}
+        description={`Únete a ${brand.name} en segundos`}
       />
 
       {/* Sin ruta OAuth en el proyecto esto no pinta nada. Ver el componente. */}

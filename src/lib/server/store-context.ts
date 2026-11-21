@@ -142,14 +142,27 @@ export async function resolvePersistedStoreContext(
 ): Promise<StoreContext> {
   const store = await client.store.findUnique({
     where: { id: storeId },
-    include: { domains: { where: { verifiedAt: { not: null } }, orderBy: [{ createdAt: "asc" }, { hostname: "asc" }], take: 1 } },
+    include: { settings: true, domains: { where: { verifiedAt: { not: null } }, orderBy: [{ createdAt: "asc" }, { hostname: "asc" }] } },
   });
   // Se concilian cobros incluso si se desactivó el storefront después de comprar.
   const hostname = store?.domains[0]?.hostname;
   if (!store || !hostname) throw new StoreContextError(503, "Falta un dominio verificado para conciliar el pago");
   const authority = normalizeAuthority(hostname);
+  let origin = new URL(`https://${authority.authority}`).origin;
+  if (store.settings?.canonicalOrigin) {
+    try {
+      const configured = new URL(store.settings.canonicalOrigin);
+      const local = configured.hostname === "localhost" || configured.hostname.endsWith(".localhost");
+      if (configured.username || configured.password || configured.pathname !== "/" || configured.search || configured.hash ||
+        !store.domains.some((domain) => domain.hostname === normalizeAuthority(configured.host).hostname) ||
+        (configured.protocol !== "https:" && !(configured.protocol === "http:" && local && process.env.NODE_ENV === "development"))) {
+        throw new Error("Origen no autorizado");
+      }
+      origin = configured.origin;
+    } catch { throw new StoreContextError(503, "El origen comercial no corresponde a un dominio verificado"); }
+  }
   return Object.freeze({
     id: store.id, name: store.name, slug: store.slug, ...authority,
-    origin: new URL(`https://${authority.authority}`).origin, [validated]: true as const,
+    origin, [validated]: true as const,
   });
 }

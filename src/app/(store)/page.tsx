@@ -1,16 +1,18 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import { HeroCarousel } from "@/components/home/hero-carousel";
 import { CategoryCircles } from "@/components/home/category-circles";
 import { ProductRow } from "@/components/home/product-row";
 import { PromoBanners } from "@/components/home/promo-banners";
 import { PromoStrip } from "@/components/home/promo-strip";
-import { DEFAULT_STORE_BRAND } from "@/components/layout/store-brand";
+import { getStoreBrand } from "@/lib/server/store-presentation";
 import { getHomeLayout } from "@/lib/server/home";
-import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/seo";
+import { getStoreSeo } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
-
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  const { name: SITE_NAME, description: SITE_DESCRIPTION } = await getStoreSeo();
+  return storePageMetadata({
   title: `${SITE_NAME} | Tienda online en Colombia`,
   description: SITE_DESCRIPTION,
   alternates: { canonical: "/" },
@@ -27,7 +29,9 @@ export const metadata: Metadata = {
     title: `${SITE_NAME} | Tienda online en Colombia`,
     description: SITE_DESCRIPTION,
   },
-};
+}, "/");
+}
+
 
 /**
  * La home se compone desde /admin/home: cada sección (hero, categorías, filas
@@ -40,7 +44,8 @@ export const metadata: Metadata = {
  */
 export default async function Home() {
   const sections = await getHomeLayout();
-  const brand = DEFAULT_STORE_BRAND;
+  const brand = await getStoreBrand();
+  const { description } = await getStoreSeo();
 
   return (
     <div className="mx-auto max-w-[1280px] space-y-10 px-4 py-6 sm:space-y-14">
@@ -60,8 +65,7 @@ export default async function Home() {
           </span>
         </h1>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-          Encuentra productos para el hogar, moda, belleza, tecnología y más,
-          con compra segura y atención desde Cali para Colombia.
+          {description}
         </p>
       </section>
 

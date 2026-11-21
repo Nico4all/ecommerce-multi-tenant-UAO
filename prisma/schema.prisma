@@ -91,6 +91,9 @@ model StoreSettings {
   contactEmail      String? @db.VarChar(254)
   emailLogoUrl      String? @db.VarChar(2048)
   seoDescription    String? @db.VarChar(500)
+  tagline           String? @db.VarChar(160)
+  city              String? @db.VarChar(120)
+  canonicalOrigin   String? @db.VarChar(2048)
   updatedAt DateTime @updatedAt
 
   @@map("store_settings")

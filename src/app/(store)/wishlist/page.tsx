@@ -1,12 +1,15 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/server/auth";
 import { getWishlist } from "@/lib/server/wishlist";
 import { WishlistView } from "@/components/wishlist/wishlist-view";
-
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   title: "Favoritos — Variedades Los Primos",
-};
+}, "/wishlist");
+}
+
 
 export default async function WishlistPage() {
   const session = await getSession();

@@ -1,12 +1,15 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import { getProducts, getBrands, type SortKey } from "@/lib/queries";
 import { Breadcrumbs } from "@/components/catalog/breadcrumbs";
 import { CatalogView } from "@/components/catalog/catalog-view";
-
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   title: "Buscar — Variedades Los Primos",
   robots: { index: false, follow: true },
-};
+}, "/search");
+}
+
 
 const SORTS: SortKey[] = [
   "relevance",

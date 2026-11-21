@@ -1,3 +1,6 @@
+"use client";
+
+import { useStoreBrand } from "./store-brand-provider";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import {
@@ -9,8 +12,8 @@ import {
  * Marca desacoplada.
  *
  * La plataforma es multi-tienda, así que el componente no conoce ningún
- * logotipo concreto: recibe un `BrandAsset` y lo pinta. `STORE_BRAND` es el de
- * la tienda activa y es el único que se publica de cara al cliente.
+ * logotipo concreto: recibe un `BrandAsset` o usa la proyección pública del
+ * contexto de tienda. La constante histórica solo conserva compatibilidad.
  *
  * La marca institucional UAO vive aparte, en `AcademicBrandMark`, y queda
  * limitada a demostración académica: aplicar la guía visual del manual no
@@ -26,8 +29,7 @@ import {
 export type { BrandAsset };
 
 /**
- * Logotipo de la tienda por defecto. Se mantiene como export propio porque es
- * el que usan los componentes que no reciben marca por prop.
+ * Export histórico; los componentes resuelven la marca actual en el provider.
  */
 export const STORE_BRAND: BrandAsset = DEFAULT_STORE_BRAND.logo;
 
@@ -86,12 +88,14 @@ const DEFAULT_MARK_HEIGHT = "2.25rem";
  * mantiene la proporción si eso llega a pasar.
  */
 export function BrandMark({
-  brand = STORE_BRAND,
+  brand: suppliedBrand,
   className,
 }: {
   brand?: BrandAsset;
   className?: string;
 }) {
+  const activeBrand = useStoreBrand();
+  const brand = suppliedBrand ?? activeBrand.logo;
   return (
     // eslint-disable-next-line @next/next/no-img-element -- SVG estático de marca: next/image no lo optimiza y añadiría trabajo para nada
     <img
@@ -106,7 +110,7 @@ export function BrandMark({
 
 /** Marca enlazada al inicio de la tienda. */
 export function BrandLink({
-  brand = STORE_BRAND,
+  brand: suppliedBrand,
   className,
   imageClassName,
   href = "/",
@@ -116,6 +120,8 @@ export function BrandLink({
   imageClassName?: string;
   href?: string;
 }) {
+  const activeBrand = useStoreBrand();
+  const brand = suppliedBrand ?? activeBrand.logo;
   return (
     <Link
       href={href}

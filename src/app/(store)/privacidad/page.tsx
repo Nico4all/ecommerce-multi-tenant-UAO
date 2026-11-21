@@ -1,14 +1,18 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPage, LegalSection } from "@/components/legal/legal-page";
-import { LEGAL_INFO } from "@/lib/legal-info";
-
-export const metadata: Metadata = {
+import { getStoreLegalInfo } from "@/lib/server/store-presentation";
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   title: "Política de Privacidad — Variedades Los Primos",
   description: "Cómo protegemos tu información al navegar y comprar en el sitio.",
-};
+}, "/privacidad");
+}
 
-export default function PrivacidadPage() {
+
+export default async function PrivacidadPage() {
+  const LEGAL_INFO = await getStoreLegalInfo();
   return (
     <LegalPage
       title="Política de Privacidad"
@@ -93,8 +97,8 @@ export default function PrivacidadPage() {
         <p>
           Si tienes dudas sobre esta política o sobre el tratamiento de tus
           datos, escríbenos a{" "}
-          <a href={`mailto:${LEGAL_INFO.correoDatos}`}>
-            {LEGAL_INFO.correoDatos}
+          <a href={LEGAL_INFO.dataHref}>
+            {LEGAL_INFO.correoDatos || "formulario de contacto"}
           </a>{" "}
           o revisa la{" "}
           <Link href="/datos-personales">

@@ -1,12 +1,15 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import { getSession } from "@/lib/server/auth";
 import { PqrForm } from "@/components/support/support-forms";
-
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   title: "PQR — Variedades Los Primos",
   description:
     "Radica una petición, queja, reclamo o sugerencia y haz seguimiento con tu número de radicado.",
-};
+}, "/pqr");
+}
+
 
 export default async function PqrPage() {
   const session = await getSession();

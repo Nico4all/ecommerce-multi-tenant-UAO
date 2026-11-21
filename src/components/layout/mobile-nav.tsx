@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useStoreBrand } from "./store-brand-provider";
 import { useRouter } from "next/navigation";
 import {
   Menu,
@@ -27,7 +28,6 @@ import { CategoryVisual } from "@/components/category-visual";
 import { LogoImage } from "@/components/layout/logo";
 import { api } from "@/lib/api-client";
 import {
-  DEFAULT_STORE_BRAND,
   type StoreBrand,
 } from "@/components/layout/store-brand";
 import type { HeaderUser } from "@/components/layout/user-menu";
@@ -36,12 +36,14 @@ import type { Category } from "@/types";
 export function MobileNav({
   user,
   categories,
-  brand = DEFAULT_STORE_BRAND,
+  brand: suppliedBrand,
 }: {
   user?: HeaderUser | null;
   categories: Category[];
   brand?: StoreBrand;
 }) {
+  const currentBrand = useStoreBrand();
+  const brand = suppliedBrand ?? currentBrand;
   const router = useRouter();
 
   const logout = async () => {

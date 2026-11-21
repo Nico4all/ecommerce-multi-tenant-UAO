@@ -1,3 +1,4 @@
+import { getStoreSeo } from "@/lib/seo";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ShieldCheck, RotateCcw } from "lucide-react";
@@ -23,9 +24,6 @@ import {
 } from "@/components/ui/tabs";
 import { formatCount, formatPrice } from "@/lib/format";
 import {
-  SITE_NAME,
-  SITE_URL,
-  absoluteUrl,
   seoDescription,
   serializeJsonLd,
 } from "@/lib/seo";
@@ -37,6 +35,7 @@ export async function generateMetadata({
 }: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
+  const { name: SITE_NAME, absoluteUrl } = await getStoreSeo();
   const { slug } = await params;
   const product = await getProduct(slug);
   if (!product) {
@@ -86,6 +85,7 @@ export default async function ProductPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  const { name: SITE_NAME, origin: SITE_URL, absoluteUrl } = await getStoreSeo();
   const { slug } = await params;
   const detail = await getProductDetail(slug);
   if (!detail) notFound();

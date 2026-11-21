@@ -1,9 +1,10 @@
+import { getStoreSeo } from "@/lib/seo";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getCategory, getProducts, getBrands } from "@/lib/queries";
 import { Breadcrumbs } from "@/components/catalog/breadcrumbs";
 import { CatalogView } from "@/components/catalog/catalog-view";
-import { SITE_NAME, seoDescription } from "@/lib/seo";
+import { seoDescription } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,7 @@ export async function generateMetadata({
 }: {
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
+  const { name: SITE_NAME } = await getStoreSeo();
   const { slug } = await params;
   const category = await getCategory(slug);
   if (!category) {

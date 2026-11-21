@@ -1,3 +1,4 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
@@ -7,13 +8,15 @@ import { EmptyState } from "@/components/catalog/product-grid";
 import { getCategories, getProducts } from "@/lib/queries";
 
 export const dynamic = "force-dynamic";
-
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   title: "Todas las categorías — Variedades Los Primos",
   description:
     "Explora todas las categorías de Variedades Los Primos y encuentra productos para el hogar, moda, belleza, tecnología y más.",
   alternates: { canonical: "/categories" },
-};
+}, "/categories");
+}
+
 
 export default async function CategoriesPage() {
   const [categories, products] = await Promise.all([

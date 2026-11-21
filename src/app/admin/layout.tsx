@@ -1,3 +1,4 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 import { AdminHeader } from "@/components/admin/admin-header";
@@ -5,11 +6,13 @@ import { getSession } from "@/lib/server/auth";
 import { countNewSupportMessages } from "@/lib/server/support";
 import { getNotificationFeed } from "@/lib/server/notifications";
 import { SITE_NAME } from "@/lib/seo";
-
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   title: `Panel de administración — ${SITE_NAME}`,
   robots: { index: false, follow: false },
-};
+});
+}
+
 
 export default async function AdminLayout({
   children,

@@ -1,13 +1,16 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/server/auth";
 import { getProfile } from "@/lib/server/account";
 import { ProfileForm } from "@/components/account/profile-form";
 import { ChangePasswordForm } from "@/components/account/change-password-form";
-
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   title: "Mi cuenta — Variedades Los Primos",
-};
+}, "/cuenta");
+}
+
 
 export default async function AccountPage() {
   const session = await getSession();

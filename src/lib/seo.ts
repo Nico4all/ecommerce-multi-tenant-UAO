@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 export const SITE_NAME = "Variedades Los Primos";
 export const SITE_URL = "https://variedadeslosprimoscol.com";
 
@@ -37,5 +39,23 @@ export async function getStoreMetadata() {
     metadataBase: new URL(site.origin), title: site.name, applicationName: site.name,
     description: site.description, alternates: { canonical: site.origin },
     openGraph: { siteName: site.name, title: site.name, description: site.description, url: site.origin, locale: site.locale.replace("-", "_") },
+  };
+}
+
+/** Adaptador para metadatos existentes, con marca y dominio del request validado. */
+export async function storePageMetadata(metadata: Metadata, path?: string): Promise<Metadata> {
+  const site = await getStoreSeo();
+  const rewrite = (value: unknown): unknown => {
+    if (typeof value === "string") return value.replaceAll(SITE_NAME, site.name).replaceAll(SITE_URL, site.origin);
+    if (Array.isArray(value)) return value.map(rewrite);
+    if (value && typeof value === "object" && Object.getPrototypeOf(value) === Object.prototype) {
+      return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, rewrite(item)]));
+    }
+    return value;
+  };
+  return {
+    ...rewrite(metadata) as Metadata,
+    metadataBase: new URL(site.origin),
+    ...(path ? { alternates: { ...metadata.alternates, canonical: site.absoluteUrl(path) } } : {}),
   };
 }

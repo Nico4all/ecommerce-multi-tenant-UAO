@@ -1,3 +1,4 @@
+import { getStoreSeo } from "@/lib/seo";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -25,13 +26,14 @@ import {
   PAYMENT_METHOD_LABEL,
   fulfillmentSteps,
 } from "@/lib/order-status";
-import { SITE_NAME } from "@/lib/seo";
+
 
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ code: string }>;
 }): Promise<Metadata> {
+  const { name: SITE_NAME } = await getStoreSeo();
   const { code } = await params;
   return {
     title: `Pedido ${code} — ${SITE_NAME}`,

@@ -1,3 +1,4 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -19,10 +20,12 @@ import { getMyOrders } from "@/lib/server/orders";
 import { formatPrice } from "@/lib/format";
 import { ORDER_STATUS_LABEL } from "@/lib/order-status";
 import { SITE_NAME } from "@/lib/seo";
-
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   title: `Mis pedidos — ${SITE_NAME}`,
-};
+}, "/orders");
+}
+
 
 const linkClass =
   "rounded-sm font-medium text-primary underline-offset-4 outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring";

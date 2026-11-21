@@ -1,22 +1,25 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BrandLink } from "@/components/layout/logo";
-import { DEFAULT_STORE_BRAND } from "@/components/layout/store-brand";
-
-export const metadata: Metadata = {
+import { getStoreBrand } from "@/lib/server/store-presentation";
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   robots: { index: false, follow: false },
-};
+});
+}
 
-export default function AuthLayout({
+
+export default async function AuthLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // Mismo punto único que el resto de la tienda: la marca sale del token, no
-  // se escribe aquí. Antes estas pantallas dibujaban su propia versión del
+  // Mismo contexto validado en servidor que el resto de la tienda.
+  // Antes estas pantallas dibujaban su propia versión del
   // nombre con un icono genérico, es decir, una segunda marca inventada
   // conviviendo con la real.
-  const brand = DEFAULT_STORE_BRAND;
+  const brand = await getStoreBrand();
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">

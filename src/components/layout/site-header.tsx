@@ -1,17 +1,18 @@
+import { getStoreBrand } from "@/lib/server/store-presentation";
 import { TopBar } from "@/components/layout/top-bar";
 import { Header } from "@/components/layout/header";
 import { CategoryNav } from "@/components/layout/category-nav";
 import { getCategories } from "@/lib/queries";
 import {
-  DEFAULT_STORE_BRAND,
   type StoreBrand,
 } from "@/components/layout/store-brand";
 
 export async function SiteHeader({
-  brand = DEFAULT_STORE_BRAND,
+  brand: suppliedBrand,
 }: {
   brand?: StoreBrand;
 }) {
+  const brand = suppliedBrand ?? await getStoreBrand();
   const categories = await getCategories();
 
   return (

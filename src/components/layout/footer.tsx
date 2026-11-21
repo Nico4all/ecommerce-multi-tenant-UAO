@@ -1,3 +1,4 @@
+import { getStoreBrand } from "@/lib/server/store-presentation";
 import Link from "next/link";
 import { Logo } from "@/components/layout/logo";
 import {
@@ -7,7 +8,6 @@ import {
   YoutubeIcon,
 } from "@/components/social-icons";
 import {
-  DEFAULT_STORE_BRAND,
   type StoreBrand,
   type StoreSocialPlatform,
 } from "@/components/layout/store-brand";
@@ -72,11 +72,12 @@ const columns: { title: string; links: { label: string; href: string }[] }[] = [
   },
 ];
 
-export function Footer({
-  brand = DEFAULT_STORE_BRAND,
+export async function Footer({
+  brand: suppliedBrand,
 }: {
   brand?: StoreBrand;
 }) {
+  const brand = suppliedBrand ?? await getStoreBrand();
   return (
     <footer className="mt-12 bg-card">
       {/* Remate rojo que cierra la página igual que la franja abre la cabecera. */}

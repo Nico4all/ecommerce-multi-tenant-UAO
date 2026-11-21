@@ -1,0 +1,3 @@
+ALTER TABLE `store_settings`
+  ADD COLUMN `tagline` VARCHAR(160) NULL,
+  ADD COLUMN `city` VARCHAR(120) NULL;

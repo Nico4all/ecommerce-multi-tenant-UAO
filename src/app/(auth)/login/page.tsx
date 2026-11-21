@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { AuthCard, AuthError, AuthHeading } from "@/components/auth/auth-card";
 import { PasswordField } from "@/components/auth/password-field";
 import { GoogleSignIn } from "@/components/auth/google-sign-in";
-import { DEFAULT_STORE_BRAND } from "@/components/layout/store-brand";
+import { useStoreBrand } from "@/components/layout/store-brand-provider";
 import { api, ApiClientError } from "@/lib/api-client";
 
 interface SessionUser {
@@ -21,6 +21,7 @@ interface SessionUser {
 }
 
 function LoginForm() {
+  const brand = useStoreBrand();
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next");
@@ -65,7 +66,7 @@ function LoginForm() {
     >
       <AuthHeading
         title="Iniciar sesión"
-        description={`Bienvenido de vuelta a ${DEFAULT_STORE_BRAND.name}`}
+        description={`Bienvenido de vuelta a ${brand.name}`}
       />
 
       {/* Aviso al llegar desde el checkout: por qué se pide la cuenta. */}

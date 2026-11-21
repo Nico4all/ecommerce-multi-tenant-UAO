@@ -1,3 +1,4 @@
+import { getStoreBrand } from "@/lib/server/store-presentation";
 import Link from "next/link";
 import { ShoppingCart, Heart } from "lucide-react";
 import { Logo } from "@/components/layout/logo";
@@ -10,7 +11,6 @@ import { cn } from "@/lib/utils";
 import { getSession } from "@/lib/server/auth";
 import { getCartCount } from "@/lib/server/carts";
 import {
-  DEFAULT_STORE_BRAND,
   type StoreBrand,
 } from "@/components/layout/store-brand";
 import type { Category } from "@/types";
@@ -24,11 +24,12 @@ import type { Category } from "@/types";
  */
 export async function Header({
   categories,
-  brand = DEFAULT_STORE_BRAND,
+  brand: suppliedBrand,
 }: {
   categories: Category[];
   brand?: StoreBrand;
 }) {
+  const brand = suppliedBrand ?? await getStoreBrand();
   const [session, cartCount] = await Promise.all([
     getSession(),
     getCartCount().catch(() => 0),

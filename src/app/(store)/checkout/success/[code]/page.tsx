@@ -20,7 +20,7 @@ import { PaymentNotice, paymentState } from "@/components/orders/payment-state";
 import { getOrderByCode } from "@/lib/server/orders";
 import { formatPrice } from "@/lib/format";
 import { ORDER_STATUS_LABEL } from "@/lib/order-status";
-import { SITE_NAME } from "@/lib/seo";
+import { getStoreSeo } from "@/lib/seo";
 
 export async function generateMetadata({
   params,
@@ -28,6 +28,7 @@ export async function generateMetadata({
   params: Promise<{ code: string }>;
 }): Promise<Metadata> {
   const { code } = await params;
+  const { name: SITE_NAME } = await getStoreSeo();
   return {
     // Neutral a propósito: esta misma URL atiende un pago aprobado y uno
     // rechazado, así que el título no puede felicitar a nadie de antemano.

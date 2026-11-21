@@ -1,10 +1,13 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import { getCart } from "@/lib/server/carts";
 import { CartView } from "@/components/cart/cart-view";
-
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   title: "Carrito — Variedades Los Primos",
-};
+}, "/cart");
+}
+
 
 export default async function CartPage() {
   const cart = await getCart();

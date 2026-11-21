@@ -58,6 +58,8 @@ export async function getCommercialSettings() {
   return {
     branding, sender, notificationEmail,
     contactEmail: mailbox(settings?.contactEmail),
+    tagline: settings?.tagline?.trim() || `Encuentra lo que necesitas en ${store.name}.`,
+    city: settings?.city?.trim() || null,
     description: settings?.seoDescription?.replace(/\s+/g, " ").trim() || `Compra online en ${store.name}.`,
   };
 }

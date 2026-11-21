@@ -1,3 +1,4 @@
+import { storePageMetadata } from "@/lib/seo";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -10,10 +11,12 @@ import { getSession } from "@/lib/server/auth";
 import { getProfile } from "@/lib/server/account";
 import { CheckoutForm } from "@/components/checkout/checkout-form";
 import { SITE_NAME } from "@/lib/seo";
-
-export const metadata: Metadata = {
+export async function generateMetadata(): Promise<Metadata> {
+  return storePageMetadata({
   title: `Finalizar compra — ${SITE_NAME}`,
-};
+}, "/checkout");
+}
+
 
 export default async function CheckoutPage() {
   const [cart, session] = await Promise.all([getCart(), getSession()]);
