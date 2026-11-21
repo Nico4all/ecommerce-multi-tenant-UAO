@@ -20,13 +20,16 @@ export async function proxy(req: NextRequest) {
   };
   const { pathname } = req.nextUrl;
   const isApi = pathname.startsWith("/api/");
-  if (pathname !== "/admin" && !pathname.startsWith("/admin/") && pathname !== "/api/admin" && !pathname.startsWith("/api/admin/")) {
+  const isPlatform = pathname === "/platform" || pathname.startsWith("/platform/") || pathname === "/api/platform" || pathname.startsWith("/api/platform/");
+  if (!isPlatform && pathname !== "/admin" && !pathname.startsWith("/admin/") && pathname !== "/api/admin" && !pathname.startsWith("/api/admin/")) {
     return privateResponse(NextResponse.next());
   }
   let role: string | null;
+  let platformAdmin = false;
   try {
-    role = await runWithStoreContext(ingress.context, async () =>
-      (await getSessionFromToken(req.cookies.get(SESSION_COOKIE)?.value))?.role ?? null);
+    const session = await runWithStoreContext(ingress.context, () => getSessionFromToken(req.cookies.get(SESSION_COOKIE)?.value));
+    role = session?.role ?? null;
+    platformAdmin = session?.platformAdmin === true;
   } catch {
     return privateResponse(NextResponse.json({ ok: false, error: "No se pudo validar el acceso" }, { status: 503 }));
   }
@@ -43,10 +46,10 @@ export async function proxy(req: NextRequest) {
     return privateResponse(NextResponse.redirect(url));
   }
 
-  if (role !== "ADMIN") {
+  if (role !== "ADMIN" || (isPlatform && !platformAdmin)) {
     if (isApi) {
       return privateResponse(NextResponse.json(
-        { ok: false, error: "Solo administradores" },
+        { ok: false, error: isPlatform ? "Solo administradores de plataforma" : "Solo administradores" },
         { status: 403 },
       ));
     }

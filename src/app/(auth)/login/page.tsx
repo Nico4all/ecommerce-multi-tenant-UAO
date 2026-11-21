@@ -18,6 +18,7 @@ interface SessionUser {
   id: string;
   name: string;
   role: "ADMIN" | "CUSTOMER";
+  platformAdmin?: boolean;
 }
 
 function LoginForm() {
@@ -40,7 +41,8 @@ function LoginForm() {
         password,
       });
       toast.success(`¡Hola de nuevo, ${user.name.split(" ")[0]}!`);
-      router.push(next ?? (user.role === "ADMIN" ? "/admin" : "/"));
+      const safeNext = next?.startsWith("/") && !next.startsWith("//") && !/[\\\x00-\x20\x7f]/.test(next) ? next : null;
+      router.push(safeNext ?? (user.platformAdmin ? "/platform" : user.role === "ADMIN" ? "/admin" : "/"));
       router.refresh();
     } catch (err) {
       setError(

@@ -46,6 +46,7 @@ export default async function AdminLayout({
         <span aria-hidden className="block h-1 w-full bg-brand" />
         <AdminHeader
           adminName={session?.name ?? "Admin"}
+          platformAdmin={session?.platformAdmin}
           newSupportCount={newSupportCount}
           notifications={notifications}
         />

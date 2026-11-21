@@ -14,6 +14,7 @@ export interface SessionUser {
   name: string;
   email: string;
   role: "ADMIN" | "CUSTOMER";
+  platformAdmin?: boolean;
 }
 
 function secret() {
@@ -35,7 +36,7 @@ async function storeIdentity(userId: string) {
   const platformAdmin = user?.platformRole === "ADMIN";
   if (!user || user.status !== "ACTIVE" || (!platformAdmin && !membership)) return null;
   return {
-    user: { id: user.id, name: user.name, email: user.email, role: platformAdmin ? "ADMIN" as const : publicStoreRole(membership?.role ?? "CUSTOMER") },
+    user: { id: user.id, name: user.name, email: user.email, role: platformAdmin ? "ADMIN" as const : publicStoreRole(membership?.role ?? "CUSTOMER"), platformAdmin },
     version: user.sessionVersion,
   };
 }
@@ -89,5 +90,12 @@ export async function requireUser(): Promise<SessionUser> {
 export async function requireAdmin(): Promise<SessionUser> {
   const user = await requireUser();
   if (user.role !== "ADMIN") throw new ApiError(403, "Solo administradores");
+  return user;
+}
+
+/** getSession vuelve a consultar el permiso de plataforma y la versión en BD. */
+export async function requirePlatformAdmin(): Promise<SessionUser> {
+  const user = await requireUser();
+  if (!user.platformAdmin) throw new ApiError(403, "Solo administradores de plataforma");
   return user;
 }

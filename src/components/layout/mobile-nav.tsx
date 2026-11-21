@@ -151,12 +151,12 @@ export function MobileNav({
               nativeButton={false}
               render={
                 <Link
-                  href="/admin"
+                  href={user.platformAdmin ? "/platform" : "/admin"}
                   className="flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-semibold text-primary hover:bg-accent"
                 />
               }
             >
-              <LayoutDashboard className="size-4" /> Panel admin
+              <LayoutDashboard className="size-4" /> {user.platformAdmin ? "Administrar plataforma" : "Panel admin"}
             </SheetClose>
           )}
           {user && (

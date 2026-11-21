@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Menu } from "lucide-react";
+import { Building2, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -22,10 +22,12 @@ export function AdminHeader({
   adminName = "Admin",
   newSupportCount = 0,
   notifications,
+  platformAdmin = false,
 }: {
   adminName?: string;
   newSupportCount?: number;
   notifications: NotificationFeed;
+  platformAdmin?: boolean;
 }) {
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur">
@@ -59,6 +61,7 @@ export function AdminHeader({
       <AdminSearch className="min-w-0 max-w-md flex-1" />
 
       <div className="ml-auto flex items-center gap-1">
+        {platformAdmin && <Link href="/platform" aria-label="Administración de plataforma" title="Administración de plataforma" className={cn(buttonVariants({ variant: "ghost", size: "icon" }))}><Building2 aria-hidden className="size-4" /></Link>}
         <ThemeToggle />
         <NotificationBell initial={notifications} />
         <Link

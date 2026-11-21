@@ -21,6 +21,7 @@ export interface HeaderUser {
   name: string;
   email: string;
   role: "ADMIN" | "CUSTOMER";
+  platformAdmin?: boolean;
 }
 
 export function UserMenu({ user }: { user: HeaderUser }) {
@@ -75,8 +76,8 @@ export function UserMenu({ user }: { user: HeaderUser }) {
           <Heart className="size-4" /> Favoritos
         </DropdownMenuItem>
         {user.role === "ADMIN" && (
-          <DropdownMenuItem render={<Link href="/admin" />}>
-            <LayoutDashboard className="size-4" /> Panel admin
+          <DropdownMenuItem render={<Link href={user.platformAdmin ? "/platform" : "/admin"} />}>
+            <LayoutDashboard className="size-4" /> {user.platformAdmin ? "Administrar plataforma" : "Panel admin"}
           </DropdownMenuItem>
         )}
         <DropdownMenuSeparator />
